@@ -43,7 +43,7 @@ module Db = struct
   let get db id =
     with_db db ~f:(fun l ->
       if (List.mem_assoc id l) then
-        (Some(id, List.assoc id l), l)
+        (Some (List.assoc id l), l)
       else
         (None, l))
 
@@ -92,13 +92,15 @@ let trim_tail s =
   let len = String.length s |> pred |> f |> succ in
   String.sub s 0 len
 
+let b64_encode = B64.encode ~alphabet:B64.uri_safe_alphabet
+
+let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
+
 let b64_of_z z =
-  Nocrypto.Numeric.Z.to_cstruct_be z |> Cstruct.to_string
-    |> B64.encode ~alphabet:B64.uri_safe_alphabet
+  Nocrypto.Numeric.Z.to_cstruct_be z |> Cstruct.to_string |> b64_encode
 
 let z_of_b64 s =
-  B64.decode ~alphabet:B64.uri_safe_alphabet s |> Cstruct.of_string
-    |> Nocrypto.Numeric.Z.of_cstruct_be
+  b64_decode s |> Cstruct.of_string |> Nocrypto.Numeric.Z.of_cstruct_be
 
 let pq_of_ned n e d =
   let open Z in
@@ -176,7 +178,33 @@ let del ks id = Db.delete ks id
 
 let get ks id = Db.get ks id >|= function
   | None -> None
-  | Some (_, k) -> Some (pub_of_priv k)
+  | Some k -> Some (pub_of_priv k)
 
 let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
     (id, pub_of_priv key))
+
+let decrypt ks id json = Db.get ks id >|= function
+  | None -> assert false (* wrong id *)
+  | Some k -> begin
+    match k.Priv.data with
+    | Priv.Rsa key -> begin
+      try match json with
+      | `Assoc obj -> begin
+          let decrypted = List.assoc "encrypted" obj
+            |> YB.Util.to_string
+            |> b64_decode
+            |> Cstruct.of_string
+            |> Nocrypto.Rsa.decrypt ~key
+            |> Cstruct.to_string
+            |> b64_encode
+          in
+          `Assoc [
+            ("status", `String "ok");
+            ("decrypted", `String decrypted)
+          ]
+          end
+      | _ -> raise Not_found (* broken json *)
+      with | Not_found ->
+        `Assoc [("status", `String "invalid data")]
+      end
+    end

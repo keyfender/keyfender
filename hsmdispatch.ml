@@ -152,6 +152,65 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       int_of_string (Wm.Rd.lookup_path_info_exn "id" rd)
   end
 
+  (** A resource for executing actions on keys via POST. Parameters for the
+      actions are sent in a JSON body, and the result is returned with a JSON
+      body as well. *)
+  class key_actions keyring = object(self)
+    inherit [Cohttp_lwt_body.t] Wm.resource
+
+    method allowed_methods rd =
+      Wm.continue [`POST] rd
+
+    method content_types_provided rd =
+      Wm.continue [
+        "application/json", Wm.continue (`Empty);
+      ] rd
+
+    method content_types_accepted rd =
+      Wm.continue [] rd
+
+    method resource_exists rd =
+      Keyring.get keyring (self#id rd)
+      >>= function
+        | None   -> Wm.continue false rd
+        | Some _ ->
+      match self#action rd with
+        | "decrypt"
+     (* | "sign" *)
+            -> Wm.continue true rd
+        | _ -> Wm.continue false rd
+
+    method process_post rd =
+      try
+        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        >>= fun body ->
+        let json = YB.from_string body in
+        let id = self#id rd in
+        let action = self#action rd in
+        begin match action with
+        | "decrypt" -> Keyring.decrypt keyring id json
+        | _         -> assert false
+        end
+        >>= fun result_json ->
+        let resp_body = `String (YB.pretty_to_string result_json) in
+        Wm.continue true { rd with Wm.Rd.resp_body }
+      with e ->
+        let result_json = `Assoc [
+            ("status", `String "error");
+            ("exception", `String (Printexc.to_string e))
+          ]
+        in
+        let resp_body = `String (YB.pretty_to_string result_json) in
+          Wm.continue false { rd with Wm.Rd.resp_body }
+
+
+
+    method private id rd = int_of_string (Wm.Rd.lookup_path_info_exn "id" rd)
+
+    method private action rd = Wm.Rd.lookup_path_info_exn "action" rd
+
+  end
+
   (** A resource for querying system config *)
   class status = object(self)
     inherit [Cohttp_lwt_body.t] Wm.resource
@@ -184,6 +243,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       ("/keys/:id", fun () -> new key keyring) ;
       ("/keys/:id/public", fun () -> new key keyring) ;
       ("/keys/:id/public.pem", fun () -> new pem_key keyring) ;
+      ("/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
       ("/system/status", fun () -> new status) ;
     ] in
     let callback conn_id request body =

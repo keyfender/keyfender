@@ -24,3 +24,5 @@ val del : storage -> int -> bool Lwt.t
 val get : storage -> int -> pub option Lwt.t
 
 val get_all : storage -> (int * pub) list Lwt.t
+
+val decrypt : storage -> int -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
