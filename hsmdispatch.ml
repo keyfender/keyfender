@@ -239,12 +239,12 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     let keyring = Keyring.create () in
     (* the route table *)
     let routes = [
-      ("/keys", fun () -> new keys keyring) ;
-      ("/keys/:id", fun () -> new key keyring) ;
-      ("/keys/:id/public", fun () -> new key keyring) ;
-      ("/keys/:id/public.pem", fun () -> new pem_key keyring) ;
-      ("/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
-      ("/system/status", fun () -> new status) ;
+      ("/api/v1/keys", fun () -> new keys keyring) ;
+      ("/api/v1/keys/:id", fun () -> new key keyring) ;
+      ("/api/v1/keys/:id/public", fun () -> new key keyring) ;
+      ("/api/v1/keys/:id/public.pem", fun () -> new pem_key keyring) ;
+      ("/api/v1/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
+      ("/api/v1/system/status", fun () -> new status) ;
     ] in
     let callback conn_id request body =
       let open Cohttp in
