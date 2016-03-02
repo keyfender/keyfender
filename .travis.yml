@@ -1,0 +1,8 @@
+language: c
+sudo: required
+install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-mirage.sh
+script: bash -ex .travis-mirage.sh
+env:
+  matrix:
+  - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=socket FLAGS="-vv"
+  - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=direct FLAGS="-vv"

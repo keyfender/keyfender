@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/Nitrokey/nitrokey-nethsm.svg)](https://travis-ci.org/Nitrokey/nitrokey-nethsm)
+
 On Unix, do:
 
 ```
