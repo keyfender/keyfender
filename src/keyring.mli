@@ -15,14 +15,14 @@ type storage
 
 val create : unit -> storage
 
-val add : storage -> priv -> int Lwt.t
+val add : storage -> priv -> string Lwt.t
 
-val put : storage -> int -> priv -> bool Lwt.t
+val put : storage -> string -> priv -> bool Lwt.t
 
-val del : storage -> int -> bool Lwt.t
+val del : storage -> string -> bool Lwt.t
 
-val get : storage -> int -> pub option Lwt.t
+val get : storage -> string -> pub option Lwt.t
 
-val get_all : storage -> (int * pub) list Lwt.t
+val get_all : storage -> (string * pub) list Lwt.t
 
-val decrypt : storage -> int -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+val decrypt : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t

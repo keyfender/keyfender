@@ -45,7 +45,7 @@ let main =
   foreign "Hsmdispatch.Main" (console @-> kv_ro @-> http @-> job)
 
 let () =
-  add_to_ocamlfind_libraries ["re.str"; "magic-mime"; "webmachine"; "yojson"; "nocrypto.lwt"];
+  add_to_ocamlfind_libraries ["re.str"; "magic-mime"; "webmachine"; "yojson"];
   add_to_opam_packages ["re"; "magic-mime"; "webmachine"; "yojson"];
 
   register "www" [

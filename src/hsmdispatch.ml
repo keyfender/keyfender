@@ -2,6 +2,8 @@ open Lwt.Infix
 
 module YB = Yojson.Basic
 
+let api_prefix = "/api/v1"
+
 module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
@@ -22,7 +24,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method private to_json rd =
       Keyring.get_all keyring
       >|= List.map (fun (id, key) -> `Assoc [
-          ("location", `String ("/keys/" ^ (string_of_int id)));
+          ("location", `String (api_prefix ^ "/keys/" ^ id));
           ("key", Keyring.json_of_pub key)
         ])
       >>= fun json_l ->
@@ -45,7 +47,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       let json = YB.from_string body in
       let key = Keyring.priv_of_json json in
       Keyring.add keyring key >>= fun new_id ->
-      let rd' = Wm.Rd.redirect ("/keys/" ^ (string_of_int new_id)) rd in
+      let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
       Wm.continue true rd'
   end
 
@@ -115,7 +117,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Wm.continue deleted { rd with Wm.Rd.resp_body }
 
     method private id rd =
-      int_of_string (Wm.Rd.lookup_path_info_exn "id" rd)
+      Wm.Rd.lookup_path_info_exn "id" rd
   end
 
   (** A resource for querying an individual key in the database by id via GET,
@@ -149,7 +151,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Wm.continue [] rd
 
     method private id rd =
-      int_of_string (Wm.Rd.lookup_path_info_exn "id" rd)
+      Wm.Rd.lookup_path_info_exn "id" rd
   end
 
   (** A resource for executing actions on keys via POST. Parameters for the
@@ -205,7 +207,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
 
 
-    method private id rd = int_of_string (Wm.Rd.lookup_path_info_exn "id" rd)
+    method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
     method private action rd = Wm.Rd.lookup_path_info_exn "action" rd
 
@@ -239,12 +241,12 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     let keyring = Keyring.create () in
     (* the route table *)
     let routes = [
-      ("/api/v1/keys", fun () -> new keys keyring) ;
-      ("/api/v1/keys/:id", fun () -> new key keyring) ;
-      ("/api/v1/keys/:id/public", fun () -> new key keyring) ;
-      ("/api/v1/keys/:id/public.pem", fun () -> new pem_key keyring) ;
-      ("/api/v1/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
-      ("/api/v1/system/status", fun () -> new status) ;
+      (api_prefix ^ "/keys", fun () -> new keys keyring) ;
+      (api_prefix ^ "/keys/:id", fun () -> new key keyring) ;
+      (api_prefix ^ "/keys/:id/public", fun () -> new key keyring) ;
+      (api_prefix ^ "/keys/:id/public.pem", fun () -> new pem_key keyring) ;
+      (api_prefix ^ "/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
+      (api_prefix ^ "/system/status", fun () -> new status) ;
     ] in
     let callback conn_id request body =
       let open Cohttp in

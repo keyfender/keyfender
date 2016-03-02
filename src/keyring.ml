@@ -24,15 +24,28 @@ end
 
 type pub = Pub.t
 
-type storage = (int * Priv.t) list Lwt_mvar.t
+type storage = (string * Priv.t) list Lwt_mvar.t
 
 
 (* Simple database to store the items *)
 module Db = struct
   let create () =
+    Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
     Lwt_mvar.create []
 
-  let id = ref 0
+  (* let id  = ref 0 *)
+  let rec new_id l =
+    let n = 20 in
+    let alphanum =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
+    let len = String.length alphanum in
+    let id = Bytes.create n in
+    for i=0 to pred n do
+      Bytes.set id i alphanum.[Random.int len]
+    done;
+    if (List.mem_assoc id l) then
+      new_id l
+    else
+      id
 
   let with_db db ~f =
     Lwt_mvar.take db   >>= fun l ->
@@ -52,9 +65,9 @@ module Db = struct
 
   let add db e =
     with_db db ~f:(fun l ->
-      incr id;
-      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [!id, e] l in
-      (!id, l'))
+      let id = new_id l in
+      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id, e] l in
+      (id, l'))
 
   let put db id e =
     let found = ref false in
