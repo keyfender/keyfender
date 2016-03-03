@@ -22,7 +22,12 @@ XENIMG ?= www
 # FLAGS for the "mirage configure" command.
 FLAGS  ?=
 
-.PHONY: all configure build run clean
+MODE ?= unix
+
+NET ?= socket
+
+
+.PHONY: all configure depend build run clean
 
 all:
 	@echo "You can then build the mirage application in the src/ directory"
@@ -30,13 +35,16 @@ all:
 	@echo "For unikernel configuration option, do \"mirage configure --help\" in src/"
 
 configure:
-	cd src && mirage configure $(FLAGS) -t $(MODE)
+	cd src && NET=$(NET) mirage configure $(FLAGS) -t $(MODE)
 
 depend:
 	cd src && make depend
 
 build:
 	cd src && make build
+
+run:
+	cd src && ./mir-www
 
 clean:
 	cd src && make clean && mirage clean
