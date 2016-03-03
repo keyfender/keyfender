@@ -215,7 +215,62 @@ let decrypt ks id json = Db.get ks id >|= function
             ("status", `String "ok");
             ("decrypted", `String decrypted)
           ]
-          end
+        end
+      | _ -> raise Not_found (* broken json *)
+      with | Not_found ->
+        `Assoc [("status", `String "invalid data")]
+      end
+    end
+
+let pkcs1_decrypt ks id json = Db.get ks id >|= function
+  | None -> assert false (* wrong id *)
+  | Some k -> begin
+    match k.Priv.data with
+    | Priv.Rsa key -> begin
+      try match json with
+      | `Assoc obj -> begin
+          let decrypted = List.assoc "encrypted" obj
+            |> YB.Util.to_string
+            |> b64_decode
+            |> Cstruct.of_string
+            |> Nocrypto.Rsa.PKCS1.decrypt ~key
+            |> function
+              | None -> raise Not_found
+              | Some d -> d
+            |> Cstruct.to_string
+            |> b64_encode
+          in
+          `Assoc [
+            ("status", `String "ok");
+            ("decrypted", `String decrypted)
+          ]
+        end
+      | _ -> raise Not_found (* broken json *)
+      with | Not_found ->
+        `Assoc [("status", `String "invalid data")]
+      end
+    end
+
+let pkcs1_sign ks id json = Db.get ks id >|= function
+  | None -> assert false (* wrong id *)
+  | Some k -> begin
+    match k.Priv.data with
+    | Priv.Rsa key -> begin
+      try match json with
+      | `Assoc obj -> begin
+          let signed = List.assoc "message" obj
+            |> YB.Util.to_string
+            |> b64_decode
+            |> Cstruct.of_string
+            |> Nocrypto.Rsa.PKCS1.sig_encode ~key
+            |> Cstruct.to_string
+            |> b64_encode
+          in
+          `Assoc [
+            ("status", `String "ok");
+            ("signedMessage", `String signed)
+          ]
+        end
       | _ -> raise Not_found (* broken json *)
       with | Not_found ->
         `Assoc [("status", `String "invalid data")]

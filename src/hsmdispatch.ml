@@ -176,9 +176,12 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       >>= function
         | None   -> Wm.continue false rd
         | Some _ ->
-      match self#action rd with
-        | "decrypt"
-     (* | "sign" *)
+      let action = self#action rd in
+      let padding = self#padding rd in
+      match (action, padding) with
+        | ("decrypt", None)
+        | ("decrypt", Some "pkcs1")
+        | ("sign", Some "pkcs1")
             -> Wm.continue true rd
         | _ -> Wm.continue false rd
 
@@ -189,9 +192,12 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         let json = YB.from_string body in
         let id = self#id rd in
         let action = self#action rd in
-        begin match action with
-        | "decrypt" -> Keyring.decrypt keyring id json
-        | _         -> assert false
+        let padding = self#padding rd in
+        begin match (action, padding) with
+        | ("decrypt", None) -> Keyring.decrypt keyring id json
+        | ("decrypt", Some "pkcs1") -> Keyring.pkcs1_decrypt keyring id json
+        | ("sign", Some "pkcs1") -> Keyring.pkcs1_sign keyring id json
+        | (_, _) -> assert false
         end
         >>= fun result_json ->
         let resp_body = `String (YB.pretty_to_string result_json) in
@@ -210,6 +216,10 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
     method private action rd = Wm.Rd.lookup_path_info_exn "action" rd
+
+    method private padding rd =
+      try Some (Wm.Rd.lookup_path_info_exn "padding" rd)
+      with _ -> None
 
   end
 
@@ -246,6 +256,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       (api_prefix ^ "/keys/:id/public", fun () -> new key keyring) ;
       (api_prefix ^ "/keys/:id/public.pem", fun () -> new pem_key keyring) ;
       (api_prefix ^ "/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
+      (api_prefix ^ "/keys/:id/actions/:padding/:action", fun () -> new key_actions keyring) ;
       (api_prefix ^ "/system/status", fun () -> new status) ;
     ] in
     let callback conn_id request body =

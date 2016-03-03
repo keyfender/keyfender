@@ -26,3 +26,7 @@ val get : storage -> string -> pub option Lwt.t
 val get_all : storage -> (string * pub) list Lwt.t
 
 val decrypt : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+
+val pkcs1_decrypt : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+
+val pkcs1_sign : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
