@@ -6,3 +6,4 @@ env:
   matrix:
   - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=socket FLAGS="-vv"
   - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=direct FLAGS="-vv"
+  - OCAML_VERSION=latest UPDATE_GCC_BINUTILS=1 MIRAGE_BACKEND=xen NET=direct FLAGS="-vv"

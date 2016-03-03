@@ -243,8 +243,6 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
   end
 
   let start c fs http =
-    (* initialize random number generator *)
-    let _ = Nocrypto_entropy_lwt.initialize () in
     (* listen on port 8080 *)
     let port = 8080 in
     (* create the database *)
