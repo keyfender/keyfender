@@ -47,4 +47,4 @@ run:
 	cd src && ./mir-www
 
 clean:
-	cd src && make clean && mirage clean
+	cd src && make clean ; mirage clean

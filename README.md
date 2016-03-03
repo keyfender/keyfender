@@ -3,28 +3,26 @@
 On Unix, do:
 
 ```
-$ env NET=socket mirage configure --unix
+$ make configure
 $ make depend
-$ make
+$ make build
 $ make run
 ```
 
-This will run the website on localhost on port 8080, so you should be
-able to visit [http://localhost:8080](http://localhost:8080) and see the
-content from htdocs directory.
+This will run the HSM on localhost on port 8080, so you should be
+able to access [http://localhost:8080/api/v1](http://localhost:8080/api/v1).
 
 For a Xen DHCP kernel, do:
 
 ```
-$ env DHCP=true mirage configure --xen
-$ make
-$ make run
+$ DHCP=true MODE=xen NET=direct make configure
+$ make build
 ```
 
-edit `www.xl` to add a VIF, e.g. via:
+edit `nethsm.xl` to add a VIF, e.g. via:
 
 ```
 vif = ['bridge=xenbr0']
 ```
 
-And then run the VM via `xl create -c www.xl`
+And then run the VM via `xl create -c nethsm.xl`
