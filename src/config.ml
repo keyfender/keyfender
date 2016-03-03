@@ -48,6 +48,6 @@ let () =
   add_to_ocamlfind_libraries ["re.str"; "magic-mime"; "webmachine"; "yojson"];
   add_to_opam_packages ["re"; "magic-mime"; "webmachine"; "yojson"];
 
-  register "www" [
+  register "nethsm" [
     main $ default_console $ fs $ http_srv
   ]

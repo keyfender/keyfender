@@ -44,7 +44,7 @@ build:
 	cd src && make build
 
 run:
-	cd src && ./mir-www
+	cd src && ./mir-nethsm
 
 clean:
 	cd src && make clean ; mirage clean
