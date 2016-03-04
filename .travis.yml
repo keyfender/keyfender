@@ -1,9 +1,28 @@
 language: c
-sudo: required
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-mirage.sh
-script: bash -ex .travis-mirage.sh
+sudo: false
+addons:
+  apt:
+    sources:
+    - avsm
+    packages:
+    - build-essential
+    - m4
+    - ocaml
+    - ocaml-native-compilers
+    - camlp4-extra
+    - opam
+    - aspcud
+    - libgmp-dev
+cache:
+  apt: true
+  directories:
+    - $HOME/.opam
+    - $HOME/.sbt
+    - $HOME/.ivy2
+before_cache:
+  - rm -f "$HOME/.opam/log/*"
+install: bash -ex .travis-install.sh
+script: bash -ex .travis-script.sh
 env:
   matrix:
-  - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=socket FLAGS="-vv"
-  - OCAML_VERSION=latest MIRAGE_BACKEND=unix NET=direct FLAGS="-vv"
-  - OCAML_VERSION=latest UPDATE_GCC_BINUTILS=1 MIRAGE_BACKEND=xen NET=direct FLAGS="-vv"
+  - FLAGS="-vv --no-depext"
