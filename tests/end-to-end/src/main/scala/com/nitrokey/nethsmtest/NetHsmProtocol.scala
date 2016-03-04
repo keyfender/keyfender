@@ -96,7 +96,6 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     def write(x: DecryptRequest) = JsObject(
       "encrypted" -> JsString(x.encrypted.toBase64)
     )
-
     def read(value: JsValue) = {
       value.asJsObject.getFields("encrypted") match {
         case Seq(JsString(encrypted)) =>
@@ -112,12 +111,40 @@ object NetHsmProtocol extends DefaultJsonProtocol {
       "status" -> JsString(x.status), 
       "decrypted" -> JsString(x.decrypted.toBase64)
     )
-
     def read(value: JsValue) = {
       value.asJsObject.getFields("status", "decrypted") match {
         case Seq(JsString(status), JsString(decrypted)) =>
           new DecryptResponse(status, decrypted.toByteArray)
         case _ => deserializationError("DecryptResponse expected")
+      }
+    }
+  }
+
+  case class SignRequest(message: Seq[Byte])
+  implicit object SignRequest extends RootJsonFormat[SignRequest] {
+    def write(x: SignRequest) = JsObject(
+      "message" -> JsString(x.message.toBase64)
+    )
+    def read(value: JsValue) = {
+      value.asJsObject.getFields("message") match {
+        case Seq(JsString(message)) =>
+          new SignRequest(message.toByteArray)
+        case _ => deserializationError("SignRequest expected")
+      }
+    }
+  }
+
+  case class SignResponse(status: String, signedMessage: Seq[Byte])
+  implicit object SignResponse extends RootJsonFormat[SignResponse] {
+    def write(x: SignResponse) = JsObject(
+      "status" -> JsString(x.status), 
+      "signedMessage" -> JsString(x.signedMessage.toBase64)
+    )
+    def read(value: JsValue) = {
+      value.asJsObject.getFields("status", "signedMessage") match {
+        case Seq(JsString(status), JsString(signedMessage)) =>
+          new SignResponse(status, signedMessage.toByteArray)
+        case _ => deserializationError("SignResponse expected")
       }
     }
   }

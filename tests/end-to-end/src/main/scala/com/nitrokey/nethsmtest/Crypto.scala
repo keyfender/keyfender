@@ -59,32 +59,21 @@ object Crypto extends LazyLogging {
   /**
    * signatureAlgorithm: Example "SHA1withRSA"
    **/
-  def sign(array: Seq[Byte], signatureAlgorithm: String, privateKey: NkPrivateRsaCrtKey): Seq[Byte] = {
+  def sign(array: Seq[Byte], algorithm: String, privateKey: NkPrivateRsaCrtKey): Seq[Byte] = {
     Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
-    val sig: Signature = Signature.getInstance(signatureAlgorithm, BouncyCastleProvider.PROVIDER_NAME)
+    val sig: Signature = Signature.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME)
     sig.initSign(privateKey.javaPrivateKey)
     sig.update(array.toArray)
     sig.sign
-  }  
-
-  def verifySignature(message: String, signature: Seq[Byte], publicKey: NkPublicRsaKey, signatureAlgorithm: String): Boolean = {
-      verifySignatureWA(message.getBytes("UTF-8").asInstanceOf[Seq[Byte]], signature, publicKey, signatureAlgorithm)
   }
 
-  /**
-   * Create hash and verify it against the given signature.
-   * The cipherSuite is not just the hash but the entire combination of hash-signature-blinding (e.g. "SHA256-RSA2048-CHAUM83")
-   */
-  def verifySignatureWA(array: Seq[Byte], signature: Seq[Byte], publicKey: NkPublicRsaKey, signatureAlgorithm: String): Boolean = {
+  def verifySignature(message: Seq[Byte], signature: Seq[Byte], publicKey: NkPublicRsaKey, algorithm: String): Boolean = {
     try {
-      Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
-      val sig: Signature = Signature.getInstance(signatureAlgorithm, BouncyCastleProvider.PROVIDER_NAME)
-      //val sig: Signature = Signature.getInstance(cipherSuite)
+      //Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
+      val sig: Signature = Signature.getInstance(algorithm) //BC doesn't support NONEwithRSA (BouncyCastleProvider.PROVIDER_NAME)
       sig.initVerify(publicKey.javaPublicKey)
-      sig.update(array.toArray)
-      val res = sig.verify(signature.toArray)
-      //logger.debug("verifySignature: result: " + res)
-      res
+      sig.update(message.toArray)
+      sig.verify(signature.toArray)
     } catch {
       case e: Exception => {
         logger.debug("verifySignature: Exception: %s" format e)

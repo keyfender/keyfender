@@ -31,8 +31,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   
   //Define values for the test scenarios
   val rand = new scala.util.Random
-  val keyPair = generateRSACrtKeyPair(2048)
-  val message = "Secure your digital life"
+  val keyPair = generateRSACrtKeyPair(4096)
   val timeout = 5.seconds
   val adminPassword = "super secret"
   val userPassword = "super secret too"
@@ -104,9 +103,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val request = KeyImport("signing", "RSA", keyPair.privateKey)
       val pipeline: HttpRequest => Future[HttpResponse] = (
         //TODO: addCredentials(BasicHttpCredentials("admin", ""))
-        logRequest
-        ~> sendReceive
-        ~> logResponse
+        sendReceive
         //~> unmarshal[SimpleResponse]
       )
       val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
@@ -115,49 +112,62 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         assert( location.nonEmpty )
         newKeyLocation = location.map(_.value).head
         assert(response.status.intValue === 303) //Redirection
-        //TODO status === "ok"
       }
     }
 
-    scenario("Retrieve public key") {
+    scenario("Retrieve public RSA key") {
       //To allow proper comparison the leading zero of values is dropped.
       val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
       
-      val pipeline: HttpRequest => Future[NkPublicKey] = logRequest ~> sendReceive ~> logResponse ~> unmarshal[NkPublicKey]
+      val pipeline: HttpRequest => Future[NkPublicKey] = sendReceive ~> unmarshal[NkPublicKey]
       val responseF: Future[NkPublicKey] = pipeline(Get(s"$host$newKeyLocation"))
       ScalaFutures.whenReady(responseF) { response => 
-        println("Original key: " + keyPair.publicKey)
-        println("Original key's length: modulus: " + keyPair.publicKey.modulus.length )
-        println("Original key's length: publicExponent: " + keyPair.publicKey.publicExponent.length )
         assert(response.publicKey === trimmedPubKey )
       }
-    }
-
-    scenario("Decrypt message") {
-      //implicit val encoding = base64Url.copy(strictPadding=true)
-      val myMessage = message.getBytes
-      val request = DecryptRequest( encrypt(myMessage, "RSA/NONE/NoPadding", keyPair.publicKey) )
-      val pipeline = sendReceive ~> unmarshal[DecryptResponse]
-      val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$newKeyLocation/actions/decrypt", request))
-      assert(responseF.futureValue.status === "ok") 
-      assert(trimPrefix(responseF.futureValue.decrypted) === myMessage)
     }
 
     scenario("List existing keys") {
       val pipeline: HttpRequest => Future[List[PublicKeyEnvelope]] = (
         //TODO addCredentials(BasicHttpCredentials("admin", adminPassword))
-        logRequest
-        ~> sendReceive 
-        ~> logResponse 
+        sendReceive 
         ~> unmarshal[List[PublicKeyEnvelope]]
       )
       val responseF: Future[List[PublicKeyEnvelope]] = pipeline(Get(s"$apiLocation/keys"))
       //ScalaFutures.whenReady(responseF) { response => 
-      assert(responseF.futureValue.length > 1)
+      assert(responseF.futureValue.length > 0)
       assert(responseF.futureValue.exists(x => x.location === newKeyLocation))
     }
 
-/*    
+    scenario("Decrypt message (RSA, no padding)") {
+      //implicit val encoding = base64Url.copy(strictPadding=true)
+      val message = "Secure your digital life".getBytes
+      val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyPair.publicKey) )
+      val pipeline = sendReceive ~> unmarshal[DecryptResponse]
+      val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$newKeyLocation/actions/decrypt", request))
+      assert(responseF.futureValue.status === "ok") 
+      assert(trimPrefix(responseF.futureValue.decrypted) === message)
+    }
+
+    scenario("Decrypt message (RSA, PKCS#1 padding)") {
+      //implicit val encoding = base64Url.copy(strictPadding=true)
+      val message = "Secure your digital life".getBytes
+      val request = DecryptRequest( encrypt(message, "RSA/NONE/PKCS1Padding", keyPair.publicKey) )
+      val pipeline = sendReceive ~> unmarshal[DecryptResponse]
+      val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/decrypt", request))
+      assert(responseF.futureValue.status === "ok") 
+      assert(trimPrefix(responseF.futureValue.decrypted) === message)
+    }
+
+    scenario("Sign message (RSA, PKCS#1 padding)") {
+      val message = "Secure your digital life".getBytes
+      val request = SignRequest(message)
+      val pipeline = logRequest ~> sendReceive ~> logResponse ~> unmarshal[SignResponse]
+      val responseF: Future[SignResponse] = pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/sign", request))
+      assert(responseF.futureValue.status === "ok") 
+      assert(verifySignature(message, responseF.futureValue.signedMessage, keyPair.publicKey, "NONEwithRSA"))
+    }
+
+    /*    
     scenario("Perform SHA256 signature with imported key") {
       val request = PrivateKeyOperation("signature", message, Some("SHA-256"), Some("PKCS#1"))
       val pipeline: HttpRequest => Future[PrivateKeyOperationResponse] = (
@@ -175,7 +185,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   
   /**
    * Remove "zero" elements from the beginning of the array. This is required when a message, 
-   * shorter than the key length, is encrypted without padding.
+   * shorter than the key length, is encrypted without padding. Otherwise comparing the message would fail.
    */
   def trimPrefix(a: Seq[Byte]): Seq[Byte] =
     a.toList.reverse.takeWhile(_ != 0).reverse
