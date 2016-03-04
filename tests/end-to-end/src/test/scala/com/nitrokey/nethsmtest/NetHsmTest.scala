@@ -21,17 +21,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   val conf = ConfigFactory.parseFile(new File("settings.conf"))
   val settings = new Settings(conf)
 
-  var apiLocation: String = ""
+  var host: String = ""
   if(settings.tls) {
-    apiLocation = "https://" + settings.host + ":" + settings.port + settings.prefix 
+    host = "https://" + settings.host + ":" + settings.port
   } else {
-    apiLocation = "http://" + settings.host + ":" + settings.port + settings.prefix 
+    host = "http://" + settings.host + ":" + settings.port
   }
+  val apiLocation = host + settings.prefix
   
   //Define values for the test scenarios
   val rand = new scala.util.Random
   val keyPair = generateRSACrtKeyPair(2048)
-  val keyID = 1
   val message = "Secure your digital life"
   val timeout = 5.seconds
   val adminPassword = "super secret"
@@ -100,19 +100,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       assert(response.status === "ok")
     }
     */
-    scenario("List existing keys") {
-      val pipeline: HttpRequest => Future[List[PublicKeyEnvelope]] = (
-        //TODO addCredentials(BasicHttpCredentials("admin", adminPassword))
-        logRequest
-        ~> sendReceive 
-        ~> logResponse 
-        ~> unmarshal[List[PublicKeyEnvelope]]
-      )
-      val responseF: Future[List[PublicKeyEnvelope]] = pipeline(Get(s"$apiLocation/keys"))
-      //ScalaFutures.whenReady(responseF) { response => 
-      assert(responseF.futureValue.length > 1)
-    }
-
     scenario("Import RSA key") {
       val request = KeyImport("signing", "RSA", keyPair.privateKey)
       val pipeline: HttpRequest => Future[HttpResponse] = (
@@ -127,7 +114,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         val location = response.headers.toList.filter(_.is("location"))
         assert( location.nonEmpty )
         newKeyLocation = location.map(_.value).head
-        assert(response.status.intValue === 303) //Redirection )
+        assert(response.status.intValue === 303) //Redirection
+        //TODO status === "ok"
       }
     }
 
@@ -136,7 +124,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
       
       val pipeline: HttpRequest => Future[NkPublicKey] = logRequest ~> sendReceive ~> logResponse ~> unmarshal[NkPublicKey]
-      val responseF: Future[NkPublicKey] = pipeline(Get(s"$apiLocation$newKeyLocation"))
+      val responseF: Future[NkPublicKey] = pipeline(Get(s"$host$newKeyLocation"))
       ScalaFutures.whenReady(responseF) { response => 
         println("Original key: " + keyPair.publicKey)
         println("Original key's length: modulus: " + keyPair.publicKey.modulus.length )
@@ -150,9 +138,23 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val myMessage = message.getBytes
       val request = DecryptRequest( encrypt(myMessage, "RSA/NONE/NoPadding", keyPair.publicKey) )
       val pipeline = sendReceive ~> unmarshal[DecryptResponse]
-      val responseF: Future[DecryptResponse] = pipeline(Post(s"$apiLocation$newKeyLocation/actions/decrypt", request))
+      val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$newKeyLocation/actions/decrypt", request))
       assert(responseF.futureValue.status === "ok") 
       assert(trimPrefix(responseF.futureValue.decrypted) === myMessage)
+    }
+
+    scenario("List existing keys") {
+      val pipeline: HttpRequest => Future[List[PublicKeyEnvelope]] = (
+        //TODO addCredentials(BasicHttpCredentials("admin", adminPassword))
+        logRequest
+        ~> sendReceive 
+        ~> logResponse 
+        ~> unmarshal[List[PublicKeyEnvelope]]
+      )
+      val responseF: Future[List[PublicKeyEnvelope]] = pipeline(Get(s"$apiLocation/keys"))
+      //ScalaFutures.whenReady(responseF) { response => 
+      assert(responseF.futureValue.length > 1)
+      assert(responseF.futureValue.exists(x => x.location === newKeyLocation))
     }
 
 /*    
