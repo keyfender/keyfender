@@ -207,7 +207,7 @@ let decrypt ks id json = Db.get ks id >|= function
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
-            |> Nocrypto.Rsa.decrypt ~key
+            |> Nocrypto.Rsa.decrypt ~key ~mask:`Yes
             |> Cstruct.to_string
             |> b64_encode
           in
@@ -233,7 +233,7 @@ let pkcs1_decrypt ks id json = Db.get ks id >|= function
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
-            |> Nocrypto.Rsa.PKCS1.decrypt ~key
+            |> Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes
             |> function
               | None -> raise Not_found
               | Some d -> d
@@ -262,7 +262,7 @@ let pkcs1_sign ks id json = Db.get ks id >|= function
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
-            |> Nocrypto.Rsa.PKCS1.sig_encode ~key
+            |> Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes
             |> Cstruct.to_string
             |> b64_encode
           in
