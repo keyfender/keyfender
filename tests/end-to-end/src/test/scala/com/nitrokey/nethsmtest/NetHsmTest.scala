@@ -169,7 +169,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       }
     }
 
-    scenario("Generate RSA key") {
+    ignore("Generate RSA key") {
       val request = KeyGeneration("signing", "RSA", 2048)
       val pipeline: HttpRequest => Future[HttpResponse] = (
         //TODO: addCredentials(BasicHttpCredentials("admin", ""))
