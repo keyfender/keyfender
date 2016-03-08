@@ -4,6 +4,14 @@ type priv
 type pub
 (** public key representation *)
 
+module Padding : sig
+  type t =
+    | None
+    | PKCS1
+    (* | OAEP *)
+    (* | PSS *)
+end
+
 val json_of_pub : pub -> Yojson.Basic.json
 
 val priv_of_json : Yojson.Basic.json -> priv
@@ -16,23 +24,23 @@ type storage
 val create : unit -> storage
 (** create a storage *)
 
-val add : storage -> priv -> string Lwt.t
+val add : storage -> key:priv -> string Lwt.t
 (** add key to storage *)
 
-val put : storage -> string -> priv -> bool Lwt.t
+val put : storage -> id:string -> key:priv -> bool Lwt.t
 (** update a key in storage *)
 
-val del : storage -> string -> bool Lwt.t
+val del : storage -> id:string -> bool Lwt.t
 (** delete a key from storage *)
 
-val get : storage -> string -> pub option Lwt.t
+val get : storage -> id:string -> pub option Lwt.t
 (** retreive a public key from storage *)
 
 val get_all : storage -> (string * pub) list Lwt.t
 (** retrieve all public keys from storage *)
 
-val decrypt : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+val decrypt : storage -> id:string -> padding:Padding.t ->
+  data:Yojson.Basic.json -> Yojson.Basic.json Lwt.t
 
-val pkcs1_decrypt : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
-
-val pkcs1_sign : storage -> string -> Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+val sign : storage -> id:string -> padding:Padding.t ->
+  data:Yojson.Basic.json -> Yojson.Basic.json Lwt.t

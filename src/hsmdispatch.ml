@@ -189,14 +189,17 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
-        let json = YB.from_string body in
+        let data = YB.from_string body in
         let id = self#id rd in
         let action = self#action rd in
         let padding = self#padding rd in
         begin match (action, padding) with
-        | ("decrypt", None) -> Keyring.decrypt keyring id json
-        | ("decrypt", Some "pkcs1") -> Keyring.pkcs1_decrypt keyring id json
-        | ("sign", Some "pkcs1") -> Keyring.pkcs1_sign keyring id json
+        | ("decrypt", None)
+          -> Keyring.decrypt keyring ~id ~data ~padding:Keyring.Padding.None
+        | ("decrypt", Some "pkcs1")
+          -> Keyring.decrypt keyring ~id ~data ~padding:Keyring.Padding.PKCS1
+        | ("sign", Some "pkcs1")
+          -> Keyring.sign keyring ~id ~data ~padding:Keyring.Padding.PKCS1
         | (_, _) -> assert false
         end
         >>= fun result_json ->

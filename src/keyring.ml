@@ -24,8 +24,15 @@ end
 
 type pub = Pub.t
 
-type storage = (string * Priv.t) list Lwt_mvar.t
+module Padding = struct
+  type t =
+    | None
+    | PKCS1
+    (* | OAEP *)
+    (* | PSS *)
+end
 
+type storage = (string * Priv.t) list Lwt_mvar.t
 
 (* Simple database to store the items *)
 module Db = struct
@@ -183,31 +190,38 @@ let priv_of_json = function
 
 let create () = Db.create ()
 
-let add ks k = Db.add ks k
+let add ks ~key = Db.add ks key
 
-let put ks id k = Db.put ks id k
+let put ks ~id ~key = Db.put ks id key
 
-let del ks id = Db.delete ks id
+let del ks ~id = Db.delete ks id
 
-let get ks id = Db.get ks id >|= function
+let get ks ~id = Db.get ks id >|= function
   | None -> None
   | Some k -> Some (pub_of_priv k)
 
 let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
     (id, pub_of_priv key))
 
-let decrypt ks id json = Db.get ks id >|= function
+let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
   | None -> assert false (* wrong id *)
   | Some k -> begin
     match k.Priv.data with
     | Priv.Rsa key -> begin
-      try match json with
+      try match data with
       | `Assoc obj -> begin
           let decrypted = List.assoc "encrypted" obj
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
-            |> Nocrypto.Rsa.decrypt ~key ~mask:`Yes
+            |> begin match padding with
+              | Padding.None -> Nocrypto.Rsa.decrypt ~key ~mask:`Yes
+              | Padding.PKCS1 -> fun x ->
+                Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes x
+                |> function
+                  | None -> raise Not_found
+                  | Some d -> d
+              end
             |> Cstruct.to_string
             |> b64_encode
           in
@@ -222,47 +236,21 @@ let decrypt ks id json = Db.get ks id >|= function
       end
     end
 
-let pkcs1_decrypt ks id json = Db.get ks id >|= function
+let sign ks ~id ~padding ~data = Db.get ks id >|= function
   | None -> assert false (* wrong id *)
   | Some k -> begin
     match k.Priv.data with
     | Priv.Rsa key -> begin
-      try match json with
-      | `Assoc obj -> begin
-          let decrypted = List.assoc "encrypted" obj
-            |> YB.Util.to_string
-            |> b64_decode
-            |> Cstruct.of_string
-            |> Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes
-            |> function
-              | None -> raise Not_found
-              | Some d -> d
-            |> Cstruct.to_string
-            |> b64_encode
-          in
-          `Assoc [
-            ("status", `String "ok");
-            ("decrypted", `String decrypted)
-          ]
-        end
-      | _ -> raise Not_found (* broken json *)
-      with | Not_found ->
-        `Assoc [("status", `String "invalid data")]
-      end
-    end
-
-let pkcs1_sign ks id json = Db.get ks id >|= function
-  | None -> assert false (* wrong id *)
-  | Some k -> begin
-    match k.Priv.data with
-    | Priv.Rsa key -> begin
-      try match json with
+      try match data with
       | `Assoc obj -> begin
           let signed = List.assoc "message" obj
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
-            |> Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes
+            |> begin match padding with
+              | Padding.None -> raise Not_found
+              | Padding.PKCS1 -> Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes
+              end
             |> Cstruct.to_string
             |> b64_encode
           in
