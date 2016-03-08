@@ -19,8 +19,10 @@ cache:
     - $HOME/.opam
     - $HOME/.sbt
     - $HOME/.ivy2
+    - $HOME/gcc
+    - $HOME/binutils
 before_cache:
-  - rm -f "$HOME/.opam/log/*"
+  - rm -rfv $HOME/.opam/log
 install: bash -ex .travis-install.sh
 script: bash -ex .travis-script.sh
 env:
