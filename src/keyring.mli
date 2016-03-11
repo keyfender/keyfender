@@ -1,6 +1,3 @@
-type priv
-(** private key representation *)
-
 type pub
 (** public key representation *)
 
@@ -14,8 +11,6 @@ end
 
 val json_of_pub : pub -> Yojson.Basic.json
 
-val priv_of_json : Yojson.Basic.json -> priv
-
 val pem_of_pub : pub -> string
 
 type storage
@@ -24,10 +19,10 @@ type storage
 val create : unit -> storage
 (** create a storage *)
 
-val add : storage -> key:priv -> string Lwt.t
+val add : storage -> key:Yojson.Basic.json -> string Lwt.t
 (** add key to storage *)
 
-val put : storage -> id:string -> key:priv -> bool Lwt.t
+val put : storage -> id:string -> key:Yojson.Basic.json -> bool Lwt.t
 (** update a key in storage *)
 
 val del : storage -> id:string -> bool Lwt.t

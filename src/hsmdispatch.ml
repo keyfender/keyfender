@@ -44,8 +44,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
     method process_post rd =
       Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
-      let json = YB.from_string body in
-      let key = Keyring.priv_of_json json in
+      let key = YB.from_string body in
       Keyring.add keyring key >>= fun new_id ->
       let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
       Wm.continue true rd'
@@ -59,8 +58,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method private of_json rd =
       Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
       >>= fun body ->
-        let json = YB.from_string body in
-        let key = Keyring.priv_of_json json in
+        let key = YB.from_string body in
         Keyring.put keyring (self#id rd) key
       >>= fun modified ->
         let resp_body =

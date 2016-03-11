@@ -122,7 +122,7 @@ let b64_of_z z =
 let z_of_b64 s =
   b64_decode s |> Cstruct.of_string |> Nocrypto.Numeric.Z.of_cstruct_be
 
-let pq_of_ned n e d =
+(* let pq_of_ned n e d =
   let open Z in
   let de = e*d in
   let modplus1 = n + one in
@@ -141,7 +141,43 @@ let pq_of_ned n e d =
           (p, q)
         else f rest
   in
-  f ks
+  f ks *)
+
+let rsa_priv_of_json = function
+  | `Assoc obj ->
+    let e = z_of_b64 @@ YB.Util.to_string @@ List.assoc "publicExponent" obj in
+    let p = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeP" obj in
+    let q = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeQ" obj in
+    Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
+  | _ -> raise (Failure "Invalid JSON")
+
+let priv_of_json = function
+  | `Assoc obj ->
+    let purpose = YB.Util.to_string @@ List.assoc "purpose" obj in
+    let algorithm = YB.Util.to_string @@ List.assoc "algorithm" obj in
+    let data_json =
+      try
+        Some (List.assoc "privateKey" obj)
+      with
+      | Not_found -> None
+    in
+    let length =
+      try
+        Some (YB.Util.to_int @@ List.assoc "length" obj)
+      with
+      | Not_found -> None
+    in
+    let data = match (algorithm, data_json, length) with
+      | ("RSA", Some json, None) -> rsa_priv_of_json json
+      | ("RSA", None, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
+      | _ -> raise (Failure "Invalid JSON")
+    in
+    { Priv.purpose; data }
+  | _ -> raise (Failure "Invalid JSON")
+
+(* let priv_of_pem s =
+  Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
+    |> function `RSA key -> key *)
 
 
 (* public functions *)
@@ -149,10 +185,6 @@ let pq_of_ned n e d =
 let pem_of_pub { Pub.data } =
   let Pub.Rsa k = data in
   `RSA k |> X509.Encoding.Pem.Public_key.to_pem_cstruct1 |> Cstruct.to_string
-
-let priv_of_pem s =
-  Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
-    |> function `RSA key -> key
 
 let json_of_pub { Pub.purpose; data } =
   let json_hd = [
@@ -170,29 +202,11 @@ let json_of_pub { Pub.purpose; data } =
   in
   `Assoc (json_hd @ json_data)
 
-let priv_of_json = function
-  | `Assoc obj ->
-    let purpose = YB.Util.to_string @@ List.assoc "purpose" obj in
-    (* let algorithm =
-      YB.Util.to_string @@ List.Assoc.find_exn obj "algorithm" in *)
-    let data =
-      try
-        let priv = YB.Util.to_assoc @@ List.assoc "privateKey" obj in
-        let e = z_of_b64 @@ YB.Util.to_string @@ List.assoc "publicExponent" priv in
-        let p = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeP" priv in
-        let q = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeQ" priv in
-        Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
-      with
-        | Not_found -> Priv.Rsa (Nocrypto.Rsa.generate 2048)
-    in
-    { Priv.purpose; data }
-  | _ -> assert false
-
 let create () = Db.create ()
 
-let add ks ~key = Db.add ks key
+let add ks ~key = priv_of_json key |> Db.add ks
 
-let put ks ~id ~key = Db.put ks id key
+let put ks ~id ~key = priv_of_json key |> Db.put ks id
 
 let del ks ~id = Db.delete ks id
 
@@ -204,7 +218,7 @@ let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
     (id, pub_of_priv key))
 
 let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
-  | None -> assert false (* wrong id *)
+  | None -> raise (Failure "Invalid key id") (* wrong id *)
   | Some k -> begin
     match k.Priv.data with
     | Priv.Rsa key -> begin
@@ -237,7 +251,7 @@ let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
     end
 
 let sign ks ~id ~padding ~data = Db.get ks id >|= function
-  | None -> assert false (* wrong id *)
+  | None -> raise (Failure "Invalid key id") (* wrong id *)
   | Some k -> begin
     match k.Priv.data with
     | Priv.Rsa key -> begin
