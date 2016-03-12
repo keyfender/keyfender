@@ -1,3 +1,4 @@
+open Core_kernel.Std
 open Lwt.Infix
 
 module YB = Yojson.Basic
@@ -47,9 +48,9 @@ module Db = struct
     let len = String.length alphanum in
     let id = Bytes.create n in
     for i=0 to pred n do
-      Bytes.set id i alphanum.[Random.int len]
+      id.[i] <- alphanum.[Random.int len]
     done;
-    if (List.mem_assoc id l) then
+    if (List.Assoc.mem l id) then
       new_id l
     else
       id
@@ -61,11 +62,7 @@ module Db = struct
         result
 
   let get db id =
-    with_db db ~f:(fun l ->
-      if (List.mem_assoc id l) then
-        (Some (List.assoc id l), l)
-      else
-        (None, l))
+    with_db db ~f:(fun l -> (List.Assoc.find l id, l))
 
   let get_all db =
     with_db db ~f:(fun l -> (l, l))
@@ -73,13 +70,13 @@ module Db = struct
   let add db e =
     with_db db ~f:(fun l ->
       let id = new_id l in
-      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id, e] l in
+      let l' = List.merge ~cmp:(fun x y -> compare (fst x) (fst y)) [id, e] l in
       (id, l'))
 
   let put db id e =
     let found = ref false in
     with_db db ~f:(fun l ->
-      let l' = List.map (fun (id', e') ->
+      let l' = List.map ~f:(fun (id', e') ->
         if id' = id
           then begin found := true; (id', e) end
           else (id', e'))
@@ -90,7 +87,7 @@ module Db = struct
   let delete db id =
     let deleted = ref false in
     with_db db ~f:(fun l ->
-      let l' = List.filter (fun (id', _) ->
+      let l' = List.filter ~f:(fun (id', _) ->
         if id' = id
           then begin deleted := true; false end
           else true)
@@ -145,25 +142,20 @@ let z_of_b64 s =
 
 let rsa_priv_of_json = function
   | `Assoc obj ->
-    let e = z_of_b64 @@ YB.Util.to_string @@ List.assoc "publicExponent" obj in
-    let p = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeP" obj in
-    let q = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeQ" obj in
+    let e = z_of_b64 @@ YB.Util.to_string @@ List.Assoc.find_exn obj "publicExponent"in
+    let p = z_of_b64 @@ YB.Util.to_string @@ List.Assoc.find_exn obj "primeP" in
+    let q = z_of_b64 @@ YB.Util.to_string @@ List.Assoc.find_exn obj "primeQ" in
     Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
   | _ -> raise (Failure "Invalid JSON")
 
 let priv_of_json = function
   | `Assoc obj ->
-    let purpose = YB.Util.to_string @@ List.assoc "purpose" obj in
-    let algorithm = YB.Util.to_string @@ List.assoc "algorithm" obj in
-    let data_json =
-      try
-        Some (List.assoc "privateKey" obj)
-      with
-      | Not_found -> None
-    in
+    let purpose = YB.Util.to_string @@ List.Assoc.find_exn obj "purpose" in
+    let algorithm = YB.Util.to_string @@ List.Assoc.find_exn obj "algorithm" in
+    let data_json = List.Assoc.find obj "privateKey" in
     let length =
       try
-        Some (YB.Util.to_int @@ List.assoc "length" obj)
+        Some (YB.Util.to_int @@ List.Assoc.find_exn obj "length")
       with
       | Not_found -> None
     in
@@ -214,7 +206,7 @@ let get ks ~id = Db.get ks id >|= function
   | None -> None
   | Some k -> Some (pub_of_priv k)
 
-let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
+let get_all ks = Db.get_all ks >|= List.map ~f:(fun (id, key) ->
     (id, pub_of_priv key))
 
 let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
@@ -224,7 +216,7 @@ let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
     | Priv.Rsa key -> begin
       try match data with
       | `Assoc obj -> begin
-          let decrypted = List.assoc "encrypted" obj
+          let decrypted = List.Assoc.find_exn obj "encrypted"
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
@@ -257,7 +249,7 @@ let sign ks ~id ~padding ~data = Db.get ks id >|= function
     | Priv.Rsa key -> begin
       try match data with
       | `Assoc obj -> begin
-          let signed = List.assoc "message" obj
+          let signed = List.Assoc.find_exn obj "message"
             |> YB.Util.to_string
             |> b64_decode
             |> Cstruct.of_string
