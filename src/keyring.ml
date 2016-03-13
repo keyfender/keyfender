@@ -43,7 +43,8 @@ module Db = struct
   (* let id  = ref 0 *)
   let rec new_id l =
     let n = 20 in
-    let alphanum =  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
+    let alphanum =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
     let len = String.length alphanum in
     let id = Bytes.create n in
     for i=0 to pred n do
@@ -101,6 +102,10 @@ end
 
 (* helper functions *)
 
+let rem_opt = function
+  | Some x -> x
+  | None -> assert false
+
 let pub_of_priv { Priv.purpose; data } =
   let data = match data with
     | Priv.Rsa d -> Pub.Rsa (Nocrypto.Rsa.pub_of_priv d)
@@ -143,41 +148,49 @@ let z_of_b64 s =
   in
   f ks *)
 
-let rsa_priv_of_json = function
-  | `Assoc obj ->
-    let e = z_of_b64 @@ YB.Util.to_string @@ List.assoc "publicExponent" obj in
-    let p = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeP" obj in
-    let q = z_of_b64 @@ YB.Util.to_string @@ List.assoc "primeQ" obj in
-    Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
-  | _ -> raise (Failure "Invalid JSON")
+let string_of_json_key json key =
+  try
+    YB.Util.member key json |> YB.Util.to_string
+  with
+    YB.Util.Type_error _ -> raise (Failure (key ^ " string missing"))
 
-let priv_of_json = function
-  | `Assoc obj ->
-    let purpose = YB.Util.to_string @@ List.assoc "purpose" obj in
-    let algorithm = YB.Util.to_string @@ List.assoc "algorithm" obj in
-    let data_json =
-      try
-        Some (List.assoc "privateKey" obj)
-      with
-      | Not_found -> None
-    in
+let rsa_priv_of_json json =
+  let e = string_of_json_key json "publicExponent" |> z_of_b64 in
+  let p = string_of_json_key json "primeP" |> z_of_b64 in
+  let q = string_of_json_key json "primeQ" |> z_of_b64 in
+  Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
+
+let priv_of_json json =
+    let purpose = string_of_json_key json "purpose" in
+    let algorithm = string_of_json_key json "algorithm" in
+    let data_json = YB.Util.member "privateKey" json in
     let length =
       try
-        Some (YB.Util.to_int @@ List.assoc "length" obj)
+        Some (YB.Util.member "length" json |> YB.Util.to_int)
       with
-      | Not_found -> None
+        YB.Util.Type_error _ -> None
     in
     let data = match (algorithm, data_json, length) with
-      | ("RSA", Some json, None) -> rsa_priv_of_json json
-      | ("RSA", None, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
-      | _ -> raise (Failure "Invalid JSON")
+      | ("RSA", (`Assoc _ as j), None) -> rsa_priv_of_json j
+      | ("RSA", `Null, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
+      | ("RSA", _, _) -> raise (Failure "Either privateKey or length must exist")
+      | _ -> raise (Failure "Unknown algorithm")
     in
     { Priv.purpose; data }
-  | _ -> raise (Failure "Invalid JSON")
 
 (* let priv_of_pem s =
   Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
     |> function `RSA key -> key *)
+
+  let json_result l =
+    `Assoc (("status", `String "ok") :: l)
+
+  let json_of_failure_msg msg =
+    `Assoc [
+      ("status", `String "error");
+      ("description", `String msg)
+    ]
+
 
 
 (* public functions *)
@@ -217,64 +230,65 @@ let get ks ~id = Db.get ks id >|= function
 let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
     (id, pub_of_priv key))
 
-let decrypt ks ~id ~padding ~data = Db.get ks id >|= function
-  | None -> raise (Failure "Invalid key id") (* wrong id *)
-  | Some k -> begin
-    match k.Priv.data with
-    | Priv.Rsa key -> begin
-      try match data with
-      | `Assoc obj -> begin
-          let decrypted = List.assoc "encrypted" obj
-            |> YB.Util.to_string
-            |> b64_decode
-            |> Cstruct.of_string
-            |> begin match padding with
-              | Padding.None -> Nocrypto.Rsa.decrypt ~key ~mask:`Yes
-              | Padding.PKCS1 -> fun x ->
-                Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes x
-                |> function
-                  | None -> raise Not_found
-                  | Some d -> d
-              end
-            |> Cstruct.to_string
-            |> b64_encode
-          in
-          `Assoc [
-            ("status", `String "ok");
-            ("decrypted", `String decrypted)
-          ]
-        end
-      | _ -> raise Not_found (* broken json *)
-      with | Not_found ->
-        `Assoc [("status", `String "invalid data")]
-      end
-    end
+let decrypt ks ~id ~padding ~data =
+  Db.get ks id
+  >|= rem_opt
+  >|= fun key ->
+  try
+    let encrypted =
+      try
+        YB.Util.member "encrypted" data
+        |> YB.Util.to_string
+        |> b64_decode
+        |> Cstruct.of_string
+      with
+        | YB.Util.Type_error _ -> raise (Failure "encrypted text missing")
+    in
+    let decrypted_opt =
+      match (key, padding) with
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.None)
+        -> Some (Nocrypto.Rsa.decrypt ~key ~mask:`Yes encrypted)
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1)
+        -> Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes encrypted
+    in
+    match decrypted_opt with
+      | Some decrypted ->
+        let decrypted_b64 = Cstruct.to_string decrypted |> b64_encode in
+        json_result [
+          ("decrypted", `String decrypted_b64)
+        ]
+      | None -> raise (Failure "decryption failed")
+  with
+    | Failure msg -> json_of_failure_msg msg
 
-let sign ks ~id ~padding ~data = Db.get ks id >|= function
-  | None -> raise (Failure "Invalid key id") (* wrong id *)
-  | Some k -> begin
-    match k.Priv.data with
-    | Priv.Rsa key -> begin
-      try match data with
-      | `Assoc obj -> begin
-          let signed = List.assoc "message" obj
-            |> YB.Util.to_string
-            |> b64_decode
-            |> Cstruct.of_string
-            |> begin match padding with
-              | Padding.None -> raise Not_found
-              | Padding.PKCS1 -> Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes
-              end
-            |> Cstruct.to_string
-            |> b64_encode
-          in
-          `Assoc [
-            ("status", `String "ok");
-            ("signedMessage", `String signed)
-          ]
+let sign ks ~id ~padding ~data =
+  Db.get ks id
+  >|= rem_opt
+  >|= fun key ->
+  try
+    let message =
+      try
+        YB.Util.member "message" data
+        |> YB.Util.to_string
+        |> b64_decode
+        |> Cstruct.of_string
+      with
+        | YB.Util.Type_error _ -> raise (Failure "message text missing")
+    in
+    let signed =
+      match (key, padding) with
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1) ->
+        begin
+          try Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes message
+          with Nocrypto.Rsa.Insufficient_key
+            -> raise (Failure "invalid message")
         end
-      | _ -> raise Not_found (* broken json *)
-      with | Not_found ->
-        `Assoc [("status", `String "invalid data")]
-      end
-    end
+      | (_, Padding.None)
+        -> raise (Failure "invalid padding")
+    in
+    let signed_b64 = Cstruct.to_string signed |> b64_encode in
+    json_result [
+      ("signedMessage", `String signed_b64)
+    ]
+  with
+    | Failure msg -> json_of_failure_msg msg

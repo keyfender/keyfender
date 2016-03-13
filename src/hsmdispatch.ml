@@ -43,11 +43,22 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Wm.continue [] rd
 
     method process_post rd =
-      Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
-      let key = YB.from_string body in
-      Keyring.add keyring key >>= fun new_id ->
-      let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
-      Wm.continue true rd'
+      try
+        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
+        let key = YB.from_string body in
+        Keyring.add keyring key
+        >>= fun new_id ->
+        let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
+        Wm.continue true rd'
+      with Failure msg ->
+        let result_json = `Assoc [
+            ("status", `String "error");
+            ("description", `String msg)
+          ]
+        in
+        let resp_body = `String (YB.pretty_to_string result_json) in
+          Wm.continue false { rd with Wm.Rd.resp_body }
+
   end
 
   (** A resource for querying an individual key in the database by id via GET,
@@ -82,7 +93,6 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | None            -> assert false
         | Some key -> let pem = Keyring.pem_of_pub key in
           Wm.continue (`String pem) rd
-
 
     method allowed_methods rd =
       Wm.continue [`GET; `HEAD; `PUT; `DELETE] rd
