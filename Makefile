@@ -46,5 +46,8 @@ build:
 run:
 	cd src && ./mir-nethsm
 
+test:
+	src/mir-nethsm & cd tests/end-to-end && sbt test ; kill $$!
+
 clean:
 	cd src && make clean ; mirage clean
