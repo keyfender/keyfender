@@ -203,79 +203,79 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
     */
   }
 
-  feature("Performance tests") {
-
-    scenario("Import RSA key") {
-      val request = KeyImport("signing", "RSA", keyPair.privateKey)
-      val pipeline: HttpRequest => Future[HttpResponse] = (
-        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
-        sendReceive
-        //~> unmarshal[SimpleResponse]
-      )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
-      whenReady(responseF) { response =>
-        val location = response.headers.toList.filter(_.is("location"))
-        assert( location.nonEmpty )
-        newKeyLocation = location.map(_.value).head
-        assert(response.status.intValue === 303) //Redirection to imported key
-      }
-    }
-
-    scenario("Sign 100 messages (RSA, PKCS#1 padding)") {
-      val rounds = 100
-
-      //Create 100 requests
-      val requests = (0 to rounds).map(counter => {
-        SignRequest( s"Secure your digital life $counter".getBytes )
-      })
-
-      val pipeline = sendReceive
-
-      //create 100 response-futures
-      val responsesF = (0 to rounds).map(counter => {
-        pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/sign", requests.seq(counter)))
-      })
-
-      //execute
-      val responses = time { Future.sequence(responsesF).futureValue }
-
-      //test
-      responses.map(response =>
-        assert(response.status.isSuccess)
-      )
-    }
-
-    scenario("Decrypt 100 messages (RSA, PKCS#1 padding)") {
-      val rounds = 100
-
-      //Create 100 messages
-      val messages = (0 to rounds).map(counter => {
-        s"Secure your digital life $counter".getBytes
-      })
-
-      //Create 100 requests
-      val requests = (0 to rounds).map(counter => {
-        DecryptRequest( encrypt(messages(counter), "RSA/NONE/PKCS1Padding", keyPair.publicKey) )
-      })
-
-      val pipeline = sendReceive ~> unmarshal[DecryptResponse]
-
-      //create 100 response-futures
-      val responsesF = (0 to rounds).map(counter => {
-        pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/decrypt", requests.seq(counter)))
-      })
-
-      //execute
-      val responses = time { Future.sequence(responsesF).futureValue }
-
-      //test
-      responses.zipWithIndex.map{case (response, i) => {
-        assert(response.status == "ok")
-        assert(trimPrefix(response.decrypted) === messages(i) )
-      }}
-    }
-
-  }
+  // feature("Performance tests") {
+  //
+  //   scenario("Import RSA key") {
+  //     val request = KeyImport("signing", "RSA", keyPair.privateKey)
+  //     val pipeline: HttpRequest => Future[HttpResponse] = (
+  //       //TODO: addCredentials(BasicHttpCredentials("admin", ""))
+  //       sendReceive
+  //       //~> unmarshal[SimpleResponse]
+  //     )
+  //     val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+  //     whenReady(responseF) { response =>
+  //       val location = response.headers.toList.filter(_.is("location"))
+  //       assert( location.nonEmpty )
+  //       newKeyLocation = location.map(_.value).head
+  //       assert(response.status.intValue === 303) //Redirection to imported key
+  //     }
+  //   }
+  //
+  //   scenario("Sign 100 messages (RSA, PKCS#1 padding)") {
+  //     val rounds = 100
+  //
+  //     //Create 100 requests
+  //     val requests = (0 to rounds).map(counter => {
+  //       SignRequest( s"Secure your digital life $counter".getBytes )
+  //     })
+  //
+  //     val pipeline = sendReceive
+  //
+  //     //create 100 response-futures
+  //     val responsesF = (0 to rounds).map(counter => {
+  //       pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/sign", requests.seq(counter)))
+  //     })
+  //
+  //     //execute
+  //     val responses = time { Future.sequence(responsesF).futureValue }
+  //
+  //     //test
+  //     responses.map(response =>
+  //       assert(response.status.isSuccess)
+  //     )
+  //   }
+  //
+  //   scenario("Decrypt 100 messages (RSA, PKCS#1 padding)") {
+  //     val rounds = 100
+  //
+  //     //Create 100 messages
+  //     val messages = (0 to rounds).map(counter => {
+  //       s"Secure your digital life $counter".getBytes
+  //     })
+  //
+  //     //Create 100 requests
+  //     val requests = (0 to rounds).map(counter => {
+  //       DecryptRequest( encrypt(messages(counter), "RSA/NONE/PKCS1Padding", keyPair.publicKey) )
+  //     })
+  //
+  //     val pipeline = sendReceive ~> unmarshal[DecryptResponse]
+  //
+  //     //create 100 response-futures
+  //     val responsesF = (0 to rounds).map(counter => {
+  //       pipeline(Post(s"$host$newKeyLocation/actions/pkcs1/decrypt", requests.seq(counter)))
+  //     })
+  //
+  //     //execute
+  //     val responses = time { Future.sequence(responsesF).futureValue }
+  //
+  //     //test
+  //     responses.zipWithIndex.map{case (response, i) => {
+  //       assert(response.status == "ok")
+  //       assert(trimPrefix(response.decrypted) === messages(i) )
+  //     }}
+  //   }
+  //
+  // }
 
   /**
    * Remove "zero" elements from the beginning of the array. This is required when a message,

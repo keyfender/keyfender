@@ -1,6 +1,10 @@
 type pub
 (** public key representation *)
 
+type 'a result =
+  | Ok of 'a
+  | Error of Yojson.Basic.json
+
 module Padding : sig
   type t =
     | None
@@ -19,10 +23,10 @@ type storage
 val create : unit -> storage
 (** create a storage *)
 
-val add : storage -> key:Yojson.Basic.json -> string Lwt.t
+val add : storage -> key:Yojson.Basic.json -> string result Lwt.t
 (** add key to storage *)
 
-val put : storage -> id:string -> key:Yojson.Basic.json -> bool Lwt.t
+val put : storage -> id:string -> key:Yojson.Basic.json -> bool result Lwt.t
 (** update a key in storage *)
 
 val del : storage -> id:string -> bool Lwt.t
@@ -35,7 +39,7 @@ val get_all : storage -> (string * pub) list Lwt.t
 (** retrieve all public keys from storage *)
 
 val decrypt : storage -> id:string -> padding:Padding.t ->
-  data:Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+  data:Yojson.Basic.json -> Yojson.Basic.json result Lwt.t
 
 val sign : storage -> id:string -> padding:Padding.t ->
-  data:Yojson.Basic.json -> Yojson.Basic.json Lwt.t
+  data:Yojson.Basic.json -> Yojson.Basic.json result Lwt.t

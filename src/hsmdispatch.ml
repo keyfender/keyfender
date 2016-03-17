@@ -4,6 +4,31 @@ module YB = Yojson.Basic
 
 let api_prefix = "/api/v1"
 
+let jsend_success data =
+  let l = match data with
+    | `Null -> []
+    | d -> ["data", d]
+  in
+  `Assoc (("status", `String "success") :: l)
+
+let jsend_failure data =
+  let l = match data with
+    | `Null -> []
+    | d -> ["data", d]
+  in
+  `Assoc (("status", `String "failure") :: l)
+
+let jsend_error msg =
+  `Assoc [
+    ("status", `String "error");
+    ("message", `String msg)
+  ]
+
+let jsend = function
+  | Keyring.Ok json -> jsend_success json
+  | Keyring.Error json -> jsend_failure json
+
+
 module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
@@ -28,7 +53,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           ("key", Keyring.json_of_pub key)
         ])
       >>= fun json_l ->
-        let json_s = YB.pretty_to_string (`List json_l) in
+        let json_s = jsend_success (`List json_l) |> YB.pretty_to_string in
         Wm.continue (`String json_s) rd
 
     method allowed_methods rd =
@@ -47,18 +72,21 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
         let key = YB.from_string body in
         Keyring.add keyring key
-        >>= fun new_id ->
-        let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
-        Wm.continue true rd'
-      with Failure msg ->
-        let result_json = `Assoc [
-            ("status", `String "error");
-            ("description", `String msg)
-          ]
-        in
-        let resp_body = `String (YB.pretty_to_string result_json) in
+        >>= function
+          | Keyring.Ok new_id ->
+            let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
+            let resp_body =
+              `String (jsend_success `Null |> YB.pretty_to_string) in
+            Wm.continue true { rd' with Wm.Rd.resp_body }
+          | Keyring.Error json ->
+            let resp_body =
+              `String (jsend_failure json |> YB.pretty_to_string) in
+            Wm.continue true { rd with Wm.Rd.resp_body }
+      with
+        | e ->
+          let json = Printexc.to_string e |> jsend_error in
+          let resp_body = `String (YB.pretty_to_string json) in
           Wm.continue false { rd with Wm.Rd.resp_body }
-
   end
 
   (** A resource for querying an individual key in the database by id via GET,
@@ -67,30 +95,36 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private of_json rd =
-      Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
-      >>= fun body ->
-        let key = YB.from_string body in
-        Keyring.put keyring (self#id rd) key
-      >>= fun modified ->
-        let resp_body =
-          if modified
-            then `String "{\"status\":\"ok\"}"
-            else `String "{\"status\":\"not found\"}"
-        in
-        Wm.continue modified { rd with Wm.Rd.resp_body }
+      begin try
+        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        >>= fun body ->
+          let key = YB.from_string body in
+          Keyring.put keyring (self#id rd) key
+        >|= function
+          | Keyring.Ok true -> jsend_success `Null
+          | Keyring.Ok false -> assert false (* can't happen, because of resource_exists *)
+          | Keyring.Error json -> jsend_failure json
+      with
+        | e -> Lwt.return (Printexc.to_string e |> jsend_error)
+      end
+      >>= fun jsend ->
+      let resp_body =
+        `String (YB.pretty_to_string jsend)
+      in
+      Wm.continue true { rd with Wm.Rd.resp_body }
 
     method private to_json rd =
       Keyring.get keyring (self#id rd)
       >>= function
-        | None            -> assert false
+        | None     -> assert false
         | Some key -> let json = Keyring.json_of_pub key in
-          let json_s = YB.pretty_to_string json in
+          let json_s = jsend_success json |> YB.pretty_to_string in
           Wm.continue (`String json_s) rd
 
     method private to_pem rd =
       Keyring.get keyring (self#id rd)
       >>= function
-        | None            -> assert false
+        | None     -> assert false
         | Some key -> let pem = Keyring.pem_of_pub key in
           Wm.continue (`String pem) rd
 
@@ -119,8 +153,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       >>= fun deleted ->
         let resp_body =
           if deleted
-            then `String "{\"status\":\"ok\"}"
-            else `String "{\"status\":\"not found\"}"
+            then `String (jsend_success `Null |> YB.pretty_to_string)
+            else assert false (* can't happen, because of resource_exists *)
         in
         Wm.continue deleted { rd with Wm.Rd.resp_body }
 
@@ -194,7 +228,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | _ -> Wm.continue false rd
 
     method process_post rd =
-      try
+      begin try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
         let data = YB.from_string body in
@@ -208,21 +242,15 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           -> Keyring.decrypt keyring ~id ~data ~padding:Keyring.Padding.PKCS1
         | ("sign", Some "pkcs1")
           -> Keyring.sign keyring ~id ~data ~padding:Keyring.Padding.PKCS1
-        | (_, _) -> assert false
+        | (_, _) -> assert false (* can't happen, because of resource_exists *)
         end
-        >>= fun result_json ->
-        let resp_body = `String (YB.pretty_to_string result_json) in
-        Wm.continue true { rd with Wm.Rd.resp_body }
-      with e ->
-        let result_json = `Assoc [
-            ("status", `String "error");
-            ("exception", `String (Printexc.to_string e))
-          ]
-        in
-        let resp_body = `String (YB.pretty_to_string result_json) in
-          Wm.continue false { rd with Wm.Rd.resp_body }
-
-
+        >|= jsend
+      with
+        | e -> Lwt.return (Printexc.to_string e |> jsend_error)
+      end
+      >>= fun jsend ->
+      let resp_body = `String (YB.pretty_to_string jsend) in
+      Wm.continue true { rd with Wm.Rd.resp_body }
 
     method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
@@ -291,11 +319,22 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           | _ -> Printf.sprintf " - %s" (String.concat ", " path)
           | exception Not_found   -> ""
         in
-        Printf.eprintf "%d - %s %s%s\n"
+        let debug_out =
+          match Sys.getenv "DEBUG" with
+          | _ ->
+            let resp_body = match body with
+              | `Empty | `String _ | `Strings _ as x -> Body.to_string x
+              | `Stream _ -> "__STREAM__"
+            in
+            Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n----------------------------------------\n"
+            (Header.to_string headers) resp_body
+          | exception Not_found   -> ""
+        in
+        Printf.eprintf "%d - %s %s%s%s\n"
           (Code.code_of_status status)
           (Code.string_of_method (Request.meth request))
           (Uri.path (Request.uri request))
-          path;
+          path debug_out;
         (* Finally, send the response to the client *)
         H.respond ~headers ~body ~status ()
     in

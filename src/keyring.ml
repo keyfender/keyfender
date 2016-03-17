@@ -1,5 +1,11 @@
 open Lwt.Infix
 
+exception Failure of Yojson.Basic.json
+
+type 'a result =
+  | Ok of 'a
+  | Error of Yojson.Basic.json
+
 module YB = Yojson.Basic
 
 module Priv = struct
@@ -34,7 +40,109 @@ end
 
 type storage = (string * Priv.t) list Lwt_mvar.t
 
+
+(* helper functions *)
+
+let failwith json:YB.json =
+  raise (Failure json)
+
+let failwith_desc desc =
+  raise (Failure (`Assoc [
+    ("description", `String desc)
+  ]))
+
+let failwith_missing keys =
+  let l = List.map (fun x -> `String x) keys in
+  raise (Failure (`Assoc [
+    ("description", `String "JSON keys are missing");
+    ("missing", `List l)
+  ]))
+
+let rem_opt = function
+  | Some x -> x
+  | None -> assert false
+
+let pub_of_priv { Priv.purpose; data } =
+  let data = match data with
+    | Priv.Rsa d -> Pub.Rsa (Nocrypto.Rsa.pub_of_priv d)
+  in
+  { Pub.purpose; data }
+
+let trim_tail s =
+  let rec f n = if n>=0 && s.[n]='\000' then f (pred n) else n in
+  let len = String.length s |> pred |> f |> succ in
+  String.sub s 0 len
+
+let b64_encode = B64.encode ~alphabet:B64.uri_safe_alphabet
+
+let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
+
+let b64_of_z z =
+  Nocrypto.Numeric.Z.to_cstruct_be z |> Cstruct.to_string |> b64_encode
+
+let z_of_b64 s =
+  b64_decode s |> Cstruct.of_string |> Nocrypto.Numeric.Z.of_cstruct_be
+
+(* let pq_of_ned n e d =
+  let open Z in
+  let de = e*d in
+  let modplus1 = n + one in
+  let deminus1 = de - one in
+  let kprima = de/n in
+  let ks = [kprima; kprima + one; kprima - one] in
+  let rec f = function
+    | [] -> assert false
+    | k :: rest -> let fi = deminus1 / k in
+      let pplusq = modplus1 - fi in
+      let delta = pplusq*pplusq - n*(of_int 4) in
+      let sqr = sqrt delta in
+      let p = (pplusq + sqr)/(of_int 2) in
+      if (n mod p) = Z.zero && p > zero
+        then let q = (pplusq - sqr)/(of_int 2) in
+          (p, q)
+        else f rest
+  in
+  f ks *)
+
+let string_of_json_key json key =
+  try
+    YB.Util.member key json |> YB.Util.to_string
+  with
+    YB.Util.Type_error _ -> failwith_missing [key]
+
+let rsa_priv_of_json json =
+  let e = string_of_json_key json "publicExponent" |> z_of_b64 in
+  let p = string_of_json_key json "primeP" |> z_of_b64 in
+  let q = string_of_json_key json "primeQ" |> z_of_b64 in
+  Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
+
+let priv_of_json json =
+  let purpose = string_of_json_key json "purpose" in
+  let algorithm = string_of_json_key json "algorithm" in
+  let data_json = YB.Util.member "privateKey" json in
+  let length =
+    try
+      Some (YB.Util.member "length" json |> YB.Util.to_int)
+    with
+      YB.Util.Type_error _ -> None
+  in
+  let data = match (algorithm, data_json, length) with
+    | ("RSA", (`Assoc _ as j), None) -> rsa_priv_of_json j
+    | ("RSA", `Null, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
+    | ("RSA", _, _)
+      -> failwith_missing ["privateKey"; "length"]
+    | _ -> failwith_desc ("Unknown key type: " ^ algorithm)
+  in
+  { Priv.purpose; data }
+
+(* let priv_of_pem s =
+  Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
+    |> function `RSA key -> key *)
+
+
+
 (* Simple database to store the items *)
+
 module Db = struct
   let create () =
     Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
@@ -100,100 +208,9 @@ module Db = struct
       (!deleted, l'))
 end
 
-(* helper functions *)
-
-let rem_opt = function
-  | Some x -> x
-  | None -> assert false
-
-let pub_of_priv { Priv.purpose; data } =
-  let data = match data with
-    | Priv.Rsa d -> Pub.Rsa (Nocrypto.Rsa.pub_of_priv d)
-  in
-  { Pub.purpose; data }
-
-let trim_tail s =
-  let rec f n = if n>=0 && s.[n]='\000' then f (pred n) else n in
-  let len = String.length s |> pred |> f |> succ in
-  String.sub s 0 len
-
-let b64_encode = B64.encode ~alphabet:B64.uri_safe_alphabet
-
-let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
-
-let b64_of_z z =
-  Nocrypto.Numeric.Z.to_cstruct_be z |> Cstruct.to_string |> b64_encode
-
-let z_of_b64 s =
-  b64_decode s |> Cstruct.of_string |> Nocrypto.Numeric.Z.of_cstruct_be
-
-(* let pq_of_ned n e d =
-  let open Z in
-  let de = e*d in
-  let modplus1 = n + one in
-  let deminus1 = de - one in
-  let kprima = de/n in
-  let ks = [kprima; kprima + one; kprima - one] in
-  let rec f = function
-    | [] -> assert false
-    | k :: rest -> let fi = deminus1 / k in
-      let pplusq = modplus1 - fi in
-      let delta = pplusq*pplusq - n*(of_int 4) in
-      let sqr = sqrt delta in
-      let p = (pplusq + sqr)/(of_int 2) in
-      if (n mod p) = Z.zero && p > zero
-        then let q = (pplusq - sqr)/(of_int 2) in
-          (p, q)
-        else f rest
-  in
-  f ks *)
-
-let string_of_json_key json key =
-  try
-    YB.Util.member key json |> YB.Util.to_string
-  with
-    YB.Util.Type_error _ -> raise (Failure (key ^ " string missing"))
-
-let rsa_priv_of_json json =
-  let e = string_of_json_key json "publicExponent" |> z_of_b64 in
-  let p = string_of_json_key json "primeP" |> z_of_b64 in
-  let q = string_of_json_key json "primeQ" |> z_of_b64 in
-  Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
-
-let priv_of_json json =
-    let purpose = string_of_json_key json "purpose" in
-    let algorithm = string_of_json_key json "algorithm" in
-    let data_json = YB.Util.member "privateKey" json in
-    let length =
-      try
-        Some (YB.Util.member "length" json |> YB.Util.to_int)
-      with
-        YB.Util.Type_error _ -> None
-    in
-    let data = match (algorithm, data_json, length) with
-      | ("RSA", (`Assoc _ as j), None) -> rsa_priv_of_json j
-      | ("RSA", `Null, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
-      | ("RSA", _, _) -> raise (Failure "Either privateKey or length must exist")
-      | _ -> raise (Failure "Unknown algorithm")
-    in
-    { Priv.purpose; data }
-
-(* let priv_of_pem s =
-  Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
-    |> function `RSA key -> key *)
-
-  let json_result l =
-    `Assoc (("status", `String "ok") :: l)
-
-  let json_of_failure_msg msg =
-    `Assoc [
-      ("status", `String "error");
-      ("description", `String msg)
-    ]
 
 
-
-(* public functions *)
+(******************** public functions ********************)
 
 let pem_of_pub { Pub.data } =
   let Pub.Rsa k = data in
@@ -217,9 +234,17 @@ let json_of_pub { Pub.purpose; data } =
 
 let create () = Db.create ()
 
-let add ks ~key = priv_of_json key |> Db.add ks
+let add ks ~key =
+  try
+    priv_of_json key |> Db.add ks >|= fun x -> Ok x
+  with
+  | Failure json -> Lwt.return (Error json)
 
-let put ks ~id ~key = priv_of_json key |> Db.put ks id
+let put ks ~id ~key =
+  try
+    priv_of_json key |> Db.put ks id >|= fun x -> Ok x
+  with
+  | Failure json -> Lwt.return (Error json)
 
 let del ks ~id = Db.delete ks id
 
@@ -242,7 +267,8 @@ let decrypt ks ~id ~padding ~data =
         |> b64_decode
         |> Cstruct.of_string
       with
-        | YB.Util.Type_error _ -> raise (Failure "encrypted text missing")
+        | YB.Util.Type_error _
+          -> failwith_missing ["encrypted"]
     in
     let decrypted_opt =
       match (key, padding) with
@@ -254,12 +280,12 @@ let decrypt ks ~id ~padding ~data =
     match decrypted_opt with
       | Some decrypted ->
         let decrypted_b64 = Cstruct.to_string decrypted |> b64_encode in
-        json_result [
+        Ok (`Assoc [
           ("decrypted", `String decrypted_b64)
-        ]
-      | None -> raise (Failure "decryption failed")
+        ])
+      | None -> failwith_desc "decryption failed"
   with
-    | Failure msg -> json_of_failure_msg msg
+    | Failure json -> Error json
 
 let sign ks ~id ~padding ~data =
   Db.get ks id
@@ -273,7 +299,8 @@ let sign ks ~id ~padding ~data =
         |> b64_decode
         |> Cstruct.of_string
       with
-        | YB.Util.Type_error _ -> raise (Failure "message text missing")
+        | YB.Util.Type_error _
+          -> failwith_missing ["message"]
     in
     let signed =
       match (key, padding) with
@@ -281,14 +308,12 @@ let sign ks ~id ~padding ~data =
         begin
           try Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes message
           with Nocrypto.Rsa.Insufficient_key
-            -> raise (Failure "invalid message")
+            -> failwith_desc "insufficient key for message"
         end
       | (_, Padding.None)
-        -> raise (Failure "invalid padding")
+        -> failwith_desc "invalid padding"
     in
     let signed_b64 = Cstruct.to_string signed |> b64_encode in
-    json_result [
-      ("signedMessage", `String signed_b64)
-    ]
+      Ok (`Assoc ["signedMessage", `String signed_b64])
   with
-    | Failure msg -> json_of_failure_msg msg
+    | Failure json -> Error json
