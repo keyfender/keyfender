@@ -14,6 +14,7 @@ import java.math.BigInteger
 import java.security.spec.RSAPublicKeySpec
 import java.security.PublicKey
 import java.security.KeyFactory
+//import Crypto.dropLeadingZero
 
 /**
  * The JSON classes we use with the API. 
@@ -24,18 +25,21 @@ object NetHsmProtocol extends DefaultJsonProtocol {
   implicit val encoding = base64Url.copy(strictPadding=true)
   
 /*TODO: Get this generic conversion working and replace the objects below with a single-line jsonFormatX.
-   implicit object SeqByte extends JsonFormat[Seq[Byte]] {
-    def write(c: Seq[Byte]) = JsString(c.toBase64)
+     implicit object SeqByte extends JsonFormat[Seq[Byte]] {
+      def write(c: Seq[Byte]) = JsString(c.toBase64)
+  
+      def read(value: JsValue) = value match {
+        case JsString(number) => number.getBytes.toArray
+        case _ => deserializationError("Seq[Byte] expected")
+      }
+    } */
 
-    def read(value: JsValue) = value match {
-      case JsString(number) => number.getBytes.toArray
-      case _ => deserializationError("Seq[Byte] expected")
-    }
-  } */
-
+  case class JsendResponse(status: String, data: JsValue)
+  implicit val JsendResponseFormat = jsonFormat2(JsendResponse)  
+  
   case class NkPublicRsaKey(modulus: Seq[Byte], publicExponent: Seq[Byte]) {
     def javaPublicKey: PublicKey = {
-      val publicKeySpec = new RSAPublicKeySpec(new BigInteger(modulus.toArray), new BigInteger(publicExponent.toArray))
+      val publicKeySpec = new RSAPublicKeySpec(new BigInteger(1, modulus.toArray), new BigInteger(1, publicExponent.toArray))
       val kf = KeyFactory.getInstance("RSA")
       kf.generatePublic(publicKeySpec)
     }
@@ -53,7 +57,7 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     def read(value: JsValue) = {
       value.asJsObject.getFields("modulus", "publicExponent") match {
         case Seq(JsString(modulus), JsString(publicExponent)) =>
-          NkPublicRsaKey(modulus.toByteArray, publicExponent.toByteArray)
+          new NkPublicRsaKey(Crypto.dropLeadingZero(modulus.toByteArray), Crypto.dropLeadingZero(publicExponent.toByteArray))
         case _ => deserializationError("PublicRSAKey expected")
       }
     }
@@ -82,8 +86,14 @@ object NetHsmProtocol extends DefaultJsonProtocol {
   case class NkPublicKey(purpose: String, algorithm: String, publicKey: NkPublicRsaKey)
   implicit val PublicKeyFormat = jsonFormat3(NkPublicKey)
   
+  case class NkPublicKeyResponse(status: String, data: NkPublicKey)
+  implicit val PublicKeyResponseFormat = jsonFormat2(NkPublicKeyResponse)
+  
   case class PublicKeyEnvelope(location: String, key: NkPublicKey)
   implicit val PublicKeyEnvelopeFormat = jsonFormat2(PublicKeyEnvelope)
+  
+  case class PublicKeyEnvelopeResponse(status: String, data: List[PublicKeyEnvelope])
+  implicit val PublicKeyEnvelopeResponseFormat = jsonFormat2(PublicKeyEnvelopeResponse)
   
   case class PasswordChange(newPassword: String)
   implicit val PasswordChangeFormat = jsonFormat1(PasswordChange)
@@ -105,21 +115,23 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     }
   }
 
-  case class DecryptResponse(status: String, decrypted: Seq[Byte])
-  implicit object DecryptResponse extends RootJsonFormat[DecryptResponse] {
-    def write(x: DecryptResponse) = JsObject(
-      "status" -> JsString(x.status), 
+  case class Decrypted(decrypted: Seq[Byte])
+  implicit object Decrypted extends RootJsonFormat[Decrypted] {
+    def write(x: Decrypted) = JsObject(
       "decrypted" -> JsString(x.decrypted.toBase64)
     )
     def read(value: JsValue) = {
-      value.asJsObject.getFields("status", "decrypted") match {
-        case Seq(JsString(status), JsString(decrypted)) =>
-          new DecryptResponse(status, decrypted.toByteArray)
-        case _ => deserializationError("DecryptResponse expected")
+      value.asJsObject.getFields("decrypted") match {
+        case Seq(JsString(decrypted)) =>
+          new Decrypted(decrypted.toByteArray)
+        case _ => deserializationError("Decrypted expected")
       }
     }
   }
 
+  case class DecryptResponse(status: String, data: Decrypted)
+  implicit val DecryptResponseFormat = jsonFormat2(DecryptResponse)
+  
   case class SignRequest(message: Seq[Byte])
   implicit object SignRequest extends RootJsonFormat[SignRequest] {
     def write(x: SignRequest) = JsObject(
@@ -134,21 +146,22 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     }
   }
 
-  case class SignResponse(status: String, signedMessage: Seq[Byte])
-  implicit object SignResponse extends RootJsonFormat[SignResponse] {
-    def write(x: SignResponse) = JsObject(
-      "status" -> JsString(x.status), 
+  case class Signed(signedMessage: Seq[Byte])
+  implicit object Signed extends RootJsonFormat[Signed] {
+    def write(x: Signed) = JsObject(
       "signedMessage" -> JsString(x.signedMessage.toBase64)
     )
     def read(value: JsValue) = {
-      value.asJsObject.getFields("status", "signedMessage") match {
-        case Seq(JsString(status), JsString(signedMessage)) =>
-          new SignResponse(status, signedMessage.toByteArray)
-        case _ => deserializationError("SignResponse expected")
+      value.asJsObject.getFields("signedMessage") match {
+        case Seq(JsString(signedMessage)) =>
+          new Signed(signedMessage.toByteArray)
+        case _ => deserializationError("Signed expected")
       }
     }
   }
-
+  case class SignResponse(status: String, data: Signed)
+  implicit val SignResponseFormat = jsonFormat2(SignResponse)
+ 
   case class KeyImport(purpose: String, algorithm: String, privateKey: NkPrivateRsaKey)
   implicit val KeyImportFormat = jsonFormat3(KeyImport)
   

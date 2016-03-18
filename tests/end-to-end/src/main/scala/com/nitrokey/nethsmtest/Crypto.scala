@@ -36,6 +36,7 @@ object Crypto extends LazyLogging {
    * cipherParam: See https://bouncycastle.org/specifications.html
    */
   def encrypt(message: Seq[Byte], cipherParam: String, key: NkPublicRsaKey) = {
+    //logger.debug("encrypt: message length: " + message.length + " cipherParam: " + cipherParam + " key modulus length: " + key.modulus.length + " key publicExponent length: " + key.publicExponent.length)
     Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
     val cipher: Cipher = Cipher.getInstance(cipherParam, BouncyCastleProvider.PROVIDER_NAME)
     cipher.init(Cipher.ENCRYPT_MODE, key.javaPublicKey)
