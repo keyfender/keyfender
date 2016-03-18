@@ -8,7 +8,7 @@ version := "0.1"
 
 organization  := "com.nitrokey"
 
-scalaVersion  := "2.11.7"
+scalaVersion  := "2.11.8"
 
 libraryDependencies ++= {
     val sprayVersion = "1.3.3"
