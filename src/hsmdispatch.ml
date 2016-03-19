@@ -62,10 +62,6 @@ let jsend = function
   | Keyring.Ok json -> jsend_success json
   | Keyring.Error json -> jsend_failure json
 
-let rem_opt = function
-  | Some x -> x
-  | None -> assert false
-
 module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
@@ -258,7 +254,17 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       try
         let _ = self#action_dispatch_exn rd in
         Wm.continue true rd
-      with _ -> Wm.continue false rd
+      with
+      | Failure msg ->
+        let resp_body = `String (jsend_error msg |> YB.pretty_to_string) in
+        Wm.continue false { rd with Wm.Rd.resp_body }
+      | e ->
+        let resp_body = `String begin
+          Printexc.to_string e
+          |> jsend_error
+          |> YB.pretty_to_string
+        end in
+        Wm.continue false { rd with Wm.Rd.resp_body }
 
     method process_post rd =
       begin try
@@ -276,9 +282,9 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
     method private action_dispatch_exn rd =
       let id = self#id rd in
-      let action = self#action rd |> rem_opt in
-      let padding = self#padding rd |> rem_opt in
-      let hash_type = self#hash_type rd |> rem_opt in
+      let action = self#action rd in
+      let padding = self#padding rd in
+      let hash_type = self#hash_type rd in
       match (action, padding, hash_type) with
         | Action.Decrypt, Padding.None,   `None ->
           let padding = Keyring.Padding.None in
@@ -297,31 +303,33 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           Keyring.sign keyring ~id ~padding
         | _, _, #Nocrypto.Hash.hash
         | _, _, `None
-          -> assert false
+          -> raise @@ Failure "invalid action resource"
 
     method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
     method private action rd =
-      try
-        let action_str = Wm.Rd.lookup_path_info_exn "action" rd in
-        Some (List.assoc action_str Action.paths)
-      with _ -> None (* invalid or no action path *)
+      let action_str = Wm.Rd.lookup_path_info_exn "action" rd in
+      try List.assoc action_str Action.paths
+      with Not_found
+        -> raise @@ Failure ("invalid action: " ^ action_str)
 
     method private padding rd =
-      try
-        let padding_str = Wm.Rd.lookup_path_info_exn "padding" rd in
-        try Some (List.assoc padding_str Padding.paths)
-        with Not_found -> None (* invalid padding path *)
-      with _ -> Some Padding.None (* no padding path *)
+      match Wm.Rd.lookup_path_info_exn "padding" rd with
+      | exception _ -> Padding.None (* no padding path *)
+      | padding_str ->
+      try List.assoc padding_str Padding.paths
+      with Not_found
+        -> raise @@ Failure ("invalid padding: " ^ padding_str)
 
     method private hash_type rd =
-      try
-        let hash_type_str = Wm.Rd.lookup_path_info_exn "hash_type" rd in
-        try Some (List.assoc hash_type_str Hash.paths)
-        with Not_found -> None (* invalid hash path *)
-      with _ -> Some `None (* no hash path *)
+      match Wm.Rd.lookup_path_info_exn "hash_type" rd with
+      | exception _ -> `None
+      | hash_type_str ->
+      try List.assoc hash_type_str Hash.paths
+      with Not_found
+        -> raise @@ Failure ("invalid hash type: " ^ hash_type_str)
 
-  end
+  end (* key actions *)
 
   (** A resource for querying system config *)
   class status = object(self)
