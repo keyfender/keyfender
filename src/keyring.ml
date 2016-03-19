@@ -34,8 +34,8 @@ module Padding = struct
   type t =
     | None
     | PKCS1
-    (* | OAEP *)
-    (* | PSS *)
+    | OAEP of Nocrypto.Hash.hash
+    | PSS of Nocrypto.Hash.hash
 end
 
 type storage = (string * Priv.t) list Lwt_mvar.t
@@ -271,11 +271,19 @@ let decrypt ks ~id ~padding ~data =
           -> failwith_missing ["encrypted"]
     in
     let decrypted_opt =
-      match (key, padding) with
+      try match (key, padding) with
       | ({ Priv.data=(Priv.Rsa key) }, Padding.None)
         -> Some (Nocrypto.Rsa.decrypt ~key ~mask:`Yes encrypted)
       | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1)
         -> Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes encrypted
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.OAEP h) ->
+        let module H = (val (Nocrypto.Hash.module_of h)) in
+        let module OAEP = (Nocrypto.Rsa.OAEP(H)) in
+        OAEP.decrypt ~key ~mask:`Yes encrypted
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.PSS _)
+        -> failwith_desc "PSS padding not available for decryption"
+      with Nocrypto.Rsa.Insufficient_key
+        -> failwith_desc "insufficient key for message"
     in
     match decrypted_opt with
       | Some decrypted ->
@@ -303,15 +311,19 @@ let sign ks ~id ~padding ~data =
           -> failwith_missing ["message"]
     in
     let signed =
-      match (key, padding) with
+      try match (key, padding) with
       | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1) ->
-        begin
-          try Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes message
-          with Nocrypto.Rsa.Insufficient_key
-            -> failwith_desc "insufficient key for message"
-        end
+        Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes message
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.PSS h) ->
+        let module H = (val (Nocrypto.Hash.module_of h)) in
+        let module PSS = (Nocrypto.Rsa.PSS(H)) in
+        PSS.sign ~key message
+      | ({ Priv.data=(Priv.Rsa key) }, Padding.OAEP _)
+        -> failwith_desc "OAEP padding not available for signing"
       | (_, Padding.None)
-        -> failwith_desc "invalid padding"
+        -> failwith_desc "padding required for signing"
+      with Nocrypto.Rsa.Insufficient_key
+        -> failwith_desc "insufficient key for message"
     in
     let signed_b64 = Cstruct.to_string signed |> b64_encode in
       Ok (`Assoc ["signedMessage", `String signed_b64])

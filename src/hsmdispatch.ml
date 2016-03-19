@@ -4,6 +4,15 @@ module YB = Yojson.Basic
 
 let api_prefix = "/api/v1"
 
+let hash_paths = [
+  `MD5, "md5" ;
+  `SHA1, "sha1" ;
+  `SHA224, "sha224" ;
+  `SHA256, "sha256" ;
+  `SHA384, "sha384" ;
+  `SHA512, "sha512" ;
+  ]
+
 let jsend_success data =
   let l = match data with
     | `Null -> []
@@ -216,34 +225,19 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method resource_exists rd =
       Keyring.get keyring (self#id rd)
       >>= function
-        | None   -> Wm.continue false rd
-        | Some _ ->
-      let action = self#action rd in
-      let padding = self#padding rd in
-      match (action, padding) with
-        | ("decrypt", None)
-        | ("decrypt", Some "pkcs1")
-        | ("sign", Some "pkcs1")
-            -> Wm.continue true rd
-        | _ -> Wm.continue false rd
+      | None   -> Wm.continue false rd
+      | Some _ ->
+      try
+        let _ = self#action_dispatch_exn rd in
+        Wm.continue true rd
+      with _ -> Wm.continue false rd
 
     method process_post rd =
       begin try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
         let data = YB.from_string body in
-        let id = self#id rd in
-        let action = self#action rd in
-        let padding = self#padding rd in
-        begin match (action, padding) with
-        | ("decrypt", None)
-          -> Keyring.decrypt keyring ~id ~data ~padding:Keyring.Padding.None
-        | ("decrypt", Some "pkcs1")
-          -> Keyring.decrypt keyring ~id ~data ~padding:Keyring.Padding.PKCS1
-        | ("sign", Some "pkcs1")
-          -> Keyring.sign keyring ~id ~data ~padding:Keyring.Padding.PKCS1
-        | (_, _) -> assert false (* can't happen, because of resource_exists *)
-        end
+        self#action_dispatch_exn rd ~data
         >|= jsend
       with
         | e -> Lwt.return (Printexc.to_string e |> jsend_error)
@@ -252,12 +246,40 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       let resp_body = `String (YB.pretty_to_string jsend) in
       Wm.continue true { rd with Wm.Rd.resp_body }
 
+    method private action_dispatch_exn rd =
+      let id = self#id rd in
+      let action = self#action rd in
+      let padding = self#padding rd in
+      let hash_type = self#hash_type rd in
+      match (action, padding, hash_type) with
+        | ("decrypt", None,         None)
+          -> Keyring.decrypt keyring ~id ~padding:Keyring.Padding.None
+        | ("decrypt", Some "pkcs1", None)
+          -> Keyring.decrypt keyring ~id ~padding:Keyring.Padding.PKCS1
+        | ("sign",    Some "pkcs1", None)
+          -> Keyring.sign keyring ~id ~padding:Keyring.Padding.PKCS1
+        | ("decrypt", Some "oaep",  Some (#Nocrypto.Hash.hash as h))
+          -> Keyring.decrypt keyring ~id ~padding:(Keyring.Padding.OAEP h)
+        | ("sign",    Some "pss",   Some (#Nocrypto.Hash.hash as h))
+          -> Keyring.sign keyring ~id ~padding:(Keyring.Padding.PSS h)
+        | _, _, Some #Nocrypto.Hash.hash
+        | _, _, Some `Invalid
+        | _, _, None
+          -> assert false
+
     method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
     method private action rd = Wm.Rd.lookup_path_info_exn "action" rd
 
     method private padding rd =
       try Some (Wm.Rd.lookup_path_info_exn "padding" rd)
+      with _ -> None
+
+    method private hash_type rd =
+      try
+        let hash_type_str = Wm.Rd.lookup_path_info_exn "hash_type" rd in
+        try Some (List.find (fun (_, x) -> x = hash_type_str) hash_paths |> fst)
+        with Not_found -> Some `Invalid
       with _ -> None
 
   end
@@ -292,8 +314,12 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       (api_prefix ^ "/keys/:id", fun () -> new key keyring) ;
       (api_prefix ^ "/keys/:id/public", fun () -> new key keyring) ;
       (api_prefix ^ "/keys/:id/public.pem", fun () -> new pem_key keyring) ;
-      (api_prefix ^ "/keys/:id/actions/:action", fun () -> new key_actions keyring) ;
-      (api_prefix ^ "/keys/:id/actions/:padding/:action", fun () -> new key_actions keyring) ;
+      (api_prefix ^ "/keys/:id/actions/:action",
+        fun () -> new key_actions keyring) ;
+      (api_prefix ^ "/keys/:id/actions/:padding/:action",
+        fun () -> new key_actions keyring) ;
+      (api_prefix ^ "/keys/:id/actions/:padding/:hash_type/:action",
+        fun () -> new key_actions keyring) ;
       (api_prefix ^ "/system/status", fun () -> new status) ;
     ] in
     let callback conn_id request body =

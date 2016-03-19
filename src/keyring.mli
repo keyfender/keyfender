@@ -9,8 +9,8 @@ module Padding : sig
   type t =
     | None
     | PKCS1
-    (* | OAEP *)
-    (* | PSS *)
+    | OAEP of Nocrypto.Hash.hash
+    | PSS of Nocrypto.Hash.hash
 end
 
 val json_of_pub : pub -> Yojson.Basic.json
