@@ -4,14 +4,39 @@ module YB = Yojson.Basic
 
 let api_prefix = "/api/v1"
 
-let hash_paths = [
-  `MD5, "md5" ;
-  `SHA1, "sha1" ;
-  `SHA224, "sha224" ;
-  `SHA256, "sha256" ;
-  `SHA384, "sha384" ;
-  `SHA512, "sha512" ;
+module Hash = struct
+  let paths = [
+    "md5", `MD5;
+    "sha1", `SHA1;
+    "sha224", `SHA224;
+    "sha256", `SHA256;
+    "sha384", `SHA384;
+    "sha512", `SHA512;
   ]
+end
+
+module Padding = struct
+  type t =
+    | None
+    | PKCS1
+    | OAEP
+    | PSS
+  let paths = [
+    "pkcs1", PKCS1;
+    "oaep", OAEP;
+    "pss", PSS;
+  ]
+end
+
+module Action = struct
+  type t =
+    | Decrypt
+    | Sign
+  let paths = [
+    "decrypt", Decrypt ;
+    "sign", Sign ;
+  ]
+end
 
 let jsend_success data =
   let l = match data with
@@ -37,6 +62,9 @@ let jsend = function
   | Keyring.Ok json -> jsend_success json
   | Keyring.Error json -> jsend_failure json
 
+let rem_opt = function
+  | Some x -> x
+  | None -> assert false
 
 module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
@@ -248,39 +276,50 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
     method private action_dispatch_exn rd =
       let id = self#id rd in
-      let action = self#action rd in
-      let padding = self#padding rd in
-      let hash_type = self#hash_type rd in
+      let action = self#action rd |> rem_opt in
+      let padding = self#padding rd |> rem_opt in
+      let hash_type = self#hash_type rd |> rem_opt in
       match (action, padding, hash_type) with
-        | ("decrypt", None,         None)
-          -> Keyring.decrypt keyring ~id ~padding:Keyring.Padding.None
-        | ("decrypt", Some "pkcs1", None)
-          -> Keyring.decrypt keyring ~id ~padding:Keyring.Padding.PKCS1
-        | ("sign",    Some "pkcs1", None)
-          -> Keyring.sign keyring ~id ~padding:Keyring.Padding.PKCS1
-        | ("decrypt", Some "oaep",  Some (#Nocrypto.Hash.hash as h))
-          -> Keyring.decrypt keyring ~id ~padding:(Keyring.Padding.OAEP h)
-        | ("sign",    Some "pss",   Some (#Nocrypto.Hash.hash as h))
-          -> Keyring.sign keyring ~id ~padding:(Keyring.Padding.PSS h)
-        | _, _, Some #Nocrypto.Hash.hash
-        | _, _, Some `Invalid
-        | _, _, None
+        | Action.Decrypt, Padding.None,   `None ->
+          let padding = Keyring.Padding.None in
+          Keyring.decrypt keyring ~id ~padding
+        | Action.Decrypt, Padding.PKCS1,  `None ->
+          let padding = Keyring.Padding.PKCS1 in
+          Keyring.decrypt keyring ~id ~padding
+        | Action.Sign,    Padding.PKCS1,  `None ->
+          let padding = Keyring.Padding.PKCS1 in
+          Keyring.sign keyring ~id ~padding
+        | Action.Decrypt, Padding.OAEP,   (#Nocrypto.Hash.hash as h) ->
+          let padding = Keyring.Padding.OAEP h in
+          Keyring.decrypt keyring ~id ~padding
+        | Action.Sign,    Padding.PSS,    (#Nocrypto.Hash.hash as h) ->
+          let padding = Keyring.Padding.PSS h in
+          Keyring.sign keyring ~id ~padding
+        | _, _, #Nocrypto.Hash.hash
+        | _, _, `None
           -> assert false
 
     method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
 
-    method private action rd = Wm.Rd.lookup_path_info_exn "action" rd
+    method private action rd =
+      try
+        let action_str = Wm.Rd.lookup_path_info_exn "action" rd in
+        Some (List.assoc action_str Action.paths)
+      with _ -> None (* invalid or no action path *)
 
     method private padding rd =
-      try Some (Wm.Rd.lookup_path_info_exn "padding" rd)
-      with _ -> None
+      try
+        let padding_str = Wm.Rd.lookup_path_info_exn "padding" rd in
+        try Some (List.assoc padding_str Padding.paths)
+        with Not_found -> None (* invalid padding path *)
+      with _ -> Some Padding.None (* no padding path *)
 
     method private hash_type rd =
       try
         let hash_type_str = Wm.Rd.lookup_path_info_exn "hash_type" rd in
-        try Some (List.find (fun (_, x) -> x = hash_type_str) hash_paths |> fst)
-        with Not_found -> Some `Invalid
-      with _ -> None
+        try Some (List.assoc hash_type_str Hash.paths)
+        with Not_found -> None (* invalid hash path *)
+      with _ -> Some `None (* no hash path *)
 
   end
 
