@@ -60,7 +60,7 @@ let jsend_error msg =
 
 let jsend = function
   | Keyring.Ok json -> jsend_success json
-  | Keyring.Error json -> jsend_failure json
+  | Keyring.Failure json -> jsend_failure json
 
 module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
@@ -111,7 +111,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
             let resp_body =
               `String (jsend_success `Null |> YB.pretty_to_string) in
             Wm.continue true { rd' with Wm.Rd.resp_body }
-          | Keyring.Error json ->
+          | Keyring.Failure json ->
             let resp_body =
               `String (jsend_failure json |> YB.pretty_to_string) in
             Wm.continue true { rd with Wm.Rd.resp_body }
@@ -136,7 +136,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         >|= function
           | Keyring.Ok true -> jsend_success `Null
           | Keyring.Ok false -> assert false (* can't happen, because of resource_exists *)
-          | Keyring.Error json -> jsend_failure json
+          | Keyring.Failure json -> jsend_failure json
       with
         | e -> Lwt.return (Printexc.to_string e |> jsend_error)
       end

@@ -3,7 +3,7 @@ type pub
 
 type 'a result =
   | Ok of 'a
-  | Error of Yojson.Basic.json
+  | Failure of Yojson.Basic.json
 
 module Padding : sig
   type t =

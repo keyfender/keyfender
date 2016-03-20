@@ -4,7 +4,7 @@ exception Failure of Yojson.Basic.json
 
 type 'a result =
   | Ok of 'a
-  | Error of Yojson.Basic.json
+  | Failure of Yojson.Basic.json
 
 module YB = Yojson.Basic
 
@@ -238,13 +238,13 @@ let add ks ~key =
   try
     priv_of_json key |> Db.add ks >|= fun x -> Ok x
   with
-  | Failure json -> Lwt.return (Error json)
+  | Failure json -> Lwt.return (Failure json)
 
 let put ks ~id ~key =
   try
     priv_of_json key |> Db.put ks id >|= fun x -> Ok x
   with
-  | Failure json -> Lwt.return (Error json)
+  | Failure json -> Lwt.return (Failure json)
 
 let del ks ~id = Db.delete ks id
 
@@ -293,7 +293,7 @@ let decrypt ks ~id ~padding ~data =
         ])
       | None -> failwith_desc "decryption failed"
   with
-    | Failure json -> Error json
+    | Failure json -> Failure json
 
 let sign ks ~id ~padding ~data =
   Db.get ks id
@@ -328,4 +328,4 @@ let sign ks ~id ~padding ~data =
     let signed_b64 = Cstruct.to_string signed |> b64_encode in
       Ok (`Assoc ["signedMessage", `String signed_b64])
   with
-    | Failure json -> Error json
+    | Failure json -> Failure json
