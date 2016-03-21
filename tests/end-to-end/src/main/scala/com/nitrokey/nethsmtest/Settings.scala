@@ -14,4 +14,12 @@ class Settings(var config: Config) {
   val prefix = config.getString("nethsm.prefix")
   val tls = config.getBoolean("nethsm.tls")
   println("Settings loaded.")
+
+  def fullHost: String = {
+    tls match {
+      case true => "https://" + host + ":" + port
+      case false => "http://" + host + ":" + port
+    }
+  }
+
 }

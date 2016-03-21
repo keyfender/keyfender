@@ -68,10 +68,13 @@ object Crypto extends LazyLogging {
     sig.sign
   }
 
+  /**
+   * See: https://docs.oracle.com/javase/7/docs/technotes/guides/security/StandardNames.html
+   */
   def verifySignature(message: Seq[Byte], signature: Seq[Byte], publicKey: NkPublicRsaKey, algorithm: String): Boolean = {
     try {
-      //Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
-      val sig: Signature = Signature.getInstance(algorithm) //BC doesn't support NONEwithRSA (BouncyCastleProvider.PROVIDER_NAME)
+      Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
+      val sig: Signature = Signature.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME)
       sig.initVerify(publicKey.javaPublicKey)
       sig.update(message.toArray)
       sig.verify(signature.toArray)

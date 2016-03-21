@@ -22,7 +22,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
   //TODO: Handle IOException
   val conf = ConfigFactory.parseFile(new File("settings.conf"))
   val settings = new Settings(conf)
-  val host = getHost(settings)
+  val host = settings.fullHost
   val apiLocation = host + settings.prefix
   
   //Spray needs an implicit ActorSystem and ExecutionContext
@@ -83,7 +83,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
   }
 
   feature("RSA key import") {
-    val purpose = "signing"
+    val purpose = "encryption"
     keyLengths.map{ keyLength =>
   
       scenario(s"Importing a RSA-$keyLength key for $purpose") {
@@ -182,78 +182,35 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
 
   feature("Decrypt message") {
     scenario("Decrypt message (RSA, no padding)") {
-      keyEnvelopes.map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
-        info(s"A RSA key with $keyLength bit")
-        
-        //implicit val encoding = base64Url.copy(strictPadding=true)
-        //Given("An encrypted message")
-        val message = "Secure your digital life".getBytes
-        val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelope.key.publicKey) )
-        
-        //When("Message is decrypted")
-        val pipeline = sendReceive ~> unmarshal[DecryptResponse]
-        val location = keyEnvelope.location
-        val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
-        
-        //Then("Decrypted message is identical")
-        whenReady(responseF) { response =>
-          assert(response.status === "success")
-          assert(trimPrefix(response.data.decrypted) === message)
-        }
+      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
+        decryptionTest(keyEnvelope, "", "RSA/NONE/NoPadding")
       }
     }
     
     scenario("Decrypt message (RSA, PKCS#1 padding)") {
-      keyEnvelopes.map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
-        info(s"A RSA key with $keyLength bit")
-
-        //implicit val encoding = base64Url.copy(strictPadding=true)
-        //Given("An encrypted message")
-        val message = "Secure your digital life".getBytes
-        val request = DecryptRequest( encrypt(message, "RSA/NONE/PKCS1Padding", keyEnvelope.key.publicKey) )
-  
-        //When("Message is decrypted")
-        val pipeline = sendReceive ~> unmarshal[DecryptResponse]
-        val location = keyEnvelope.location
-        val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$location/actions/pkcs1/decrypt", request))
-  
-        //Then("Decrypted message is identical")
-        whenReady(responseF) { response =>
-          assert(response.status === "success")
-          assert(trimPrefix(response.data.decrypted) === message)
-        }
+      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
+        decryptionTest(keyEnvelope, "/pkcs1", "RSA/NONE/PKCS1Padding")
       }
+    }
+    scenario("Decrypt message (RSA, OAEP)") {
+      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
+        decryptionTest(keyEnvelope, "/oaep/sha1", "RSA/None/OAEPWithSHA1AndMGF1Padding")
+      }      
     }
   }
   
   feature("Sign message") {
     scenario("Sign message (RSA, PKCS#1 padding)") {
-      keyEnvelopes.map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
-        info(s"A RSA key with $keyLength bit")
-      
-        //Given("A message")
-        val message = "Secure your digital life".getBytes
-        
-        //When("Message is signed")
-        val request = SignRequest(message)
-        val pipeline = sendReceive ~> unmarshal[SignResponse]
-        val location = keyEnvelope.location
-        val responseF: Future[SignResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
-        
-        //Then("Signature is correct")
-        whenReady(responseF) { response =>
-          assert(response.status === "success")
-          assert(verifySignature(message, response.data.signedMessage, keyEnvelope.key.publicKey, "NONEwithRSA"))
-        }
+      keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
+        signatureTest(keyEnvelope, "/pkcs1", "NONEwithRSA")
       }
     }
-    scenario("Sign message (RSA, PSS padding)") (pending)
-    
-    scenario("Sign message (RSA, OAEP)") (pending)
-    
+    scenario("Sign message (RSA, PSS padding)") {
+      keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
+        signatureTest(keyEnvelope, "/pss/sha1", "RSASSA-PSS")
+      }      
+    }
+        
     ignore("Perform SHA256 signature with imported key") {
     /*  val message = "secure your digital life"
       val request = PrivateKeyOperation("signature", message, Some("SHA-256"), Some("PKCS#1"))
@@ -354,13 +311,47 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
 
   }
 
-  def getHost(settings: Settings): String = {
-    settings.tls match {
-      case true => "https://" + settings.host + ":" + settings.port
-      case false => "http://" + settings.host + ":" + settings.port
+  def decryptionTest(keyEnvelope: PublicKeyEnvelope, parameter: String, cipherSuite: String) = {
+    val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+    info(s"A RSA key with $keyLength bit")
+    
+    //implicit val encoding = base64Url.copy(strictPadding=true)
+    //Given("An encrypted message")
+    val message = "Secure your digital life".getBytes
+    val request = DecryptRequest( encrypt(message, cipherSuite, keyEnvelope.key.publicKey) )
+    
+    //When("Message is decrypted")
+    val pipeline = sendReceive ~> unmarshal[DecryptResponse]
+    val location = keyEnvelope.location
+    val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$location/actions$parameter/decrypt", request))
+    
+    //Then("Decrypted message is identical")
+    whenReady(responseF) { response =>
+      assert(response.status === "success")
+      assert(trimPrefix(response.data.decrypted) === message)
     }
   }
-
+  
+  def signatureTest(keyEnvelope: PublicKeyEnvelope, parameter: String, cipherSuite: String) = {
+    val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+    info(s"A RSA key with $keyLength bit")
+  
+    //Given("A message")
+    val message = "Secure your digital life".getBytes
+    
+    //When("Message is signed")
+    val request = SignRequest(message)
+    val pipeline = sendReceive ~> unmarshal[SignResponse]
+    val location = keyEnvelope.location
+    val responseF: Future[SignResponse] = pipeline(Post(s"$host$location/actions$parameter/sign", request))
+    
+    //Then("Signature is correct")
+    whenReady(responseF) { response =>
+      assert(response.status === "success")
+      assert(verifySignature(message, response.data.signedMessage, keyEnvelope.key.publicKey, cipherSuite))
+    }
+  }
+  
   /**
    * Remove "zero" elements from the beginning of the array. This is required when a message,
    * shorter than the key length, is encrypted without padding. Otherwise comparing the message would fail.
