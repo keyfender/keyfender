@@ -135,7 +135,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           Keyring.put keyring (self#id rd) key
         >|= function
           | Keyring.Ok true -> jsend_success `Null
-          | Keyring.Ok false -> assert false (* can't happen, because of resource_exists *)
+          | Keyring.Ok false -> assert false (* can't happen, because of
+                                                resource_exists *)
           | Keyring.Failure json -> jsend_failure json
       with
         | e -> Lwt.return (Printexc.to_string e |> jsend_error)
@@ -371,9 +372,9 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     ] in
     let callback conn_id request body =
       let open Cohttp in
-      (* Perform route dispatch. If [None] is returned, then the URI path did not
-       * match any of the route patterns. In this case the server should return a
-       * 404 [`Not_found]. *)
+      (* Perform route dispatch. If [None] is returned, then the URI path did
+      not match any of the route patterns. In this case the server should
+      return a 404 [`Not_found]. *)
       Wm.dispatch' routes ~body ~request
       >|= begin function
         | None        -> (`Not_found, Header.init (), `String "Not found", [])
@@ -399,7 +400,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
               | `Empty | `String _ | `Strings _ as x -> Body.to_string x
               | `Stream _ -> "__STREAM__"
             in
-            Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n----------------------------------------\n"
+            Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n\
+                            ----------------------------------------\n"
             (Header.to_string headers) resp_body
           | exception Not_found   -> ""
         in
