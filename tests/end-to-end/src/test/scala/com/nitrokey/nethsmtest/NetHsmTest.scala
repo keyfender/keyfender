@@ -224,6 +224,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
       val response = Await.result(f, timeout)
       assert(verifySignature(message.getBytes, response.blob, keyEnvelope.key.publicKey, "SHA256WithRSA")) */
     }
+    */
   }
   
   feature("Delete RSA key") {
