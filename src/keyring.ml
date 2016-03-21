@@ -158,10 +158,11 @@ module Db = struct
     for i=0 to pred n do
       Bytes.set id i alphanum.[Random.int len]
     done;
-    if (List.mem_assoc id l) then
+    let id' = Bytes.to_string id in
+    if (List.mem_assoc id' l) then
       new_id l
     else
-      id
+      id'
 
   let with_db db ~f =
     Lwt_mvar.take db   >>= fun l ->
