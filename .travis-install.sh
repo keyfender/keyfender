@@ -38,7 +38,6 @@ export CPATH=$HOME/binutils/include:$CPATH
 #install opam
 opam init
 opam update -u
-opam install mirage=2.7.0
 eval $(opam config env)
 
 # install mirage
