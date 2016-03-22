@@ -351,7 +351,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Wm.continue [] rd
   end
 
-  let start c fs http =
+  let start c _ http =
     (* listen on port 8080 *)
     let port = 8080 in
     (* create the database *)
@@ -370,7 +370,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         fun () -> new key_actions keyring) ;
       (api_prefix ^ "/system/status", fun () -> new status) ;
     ] in
-    let callback conn_id request body =
+    let callback _ request body =
       let open Cohttp in
       (* Perform route dispatch. If [None] is returned, then the URI path did
       not match any of the route patterns. In this case the server should
