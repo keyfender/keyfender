@@ -38,6 +38,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
   //Define values for the test scenarios
   val rand = new scala.util.Random
   val keyLengths = List(1024, 2048, 3072, 4096)
+  val hashAlgorithms = List("md5", "sha1", "sha224", "sha256", "sha384", "sha512") 
   val keyEnvelopes = new ListBuffer[PublicKeyEnvelope]
   val adminPassword = "super secret"
   val userPassword = "secret too"
@@ -192,25 +193,67 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
         decryptionTest(keyEnvelope, "/pkcs1", "RSA/NONE/PKCS1Padding")
       }
     }
-    scenario("Decrypt message (RSA, OAEP)") {
-      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
-        decryptionTest(keyEnvelope, "/oaep/sha1", "RSA/None/OAEPWithSHA1AndMGF1Padding")
+    hashAlgorithms.map{ hash =>
+      scenario("Decrypt message (RSA, OAEP, "+hash+")") {
+        keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
+          if( !(keyEnvelope.key.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
+            decryptionTest(keyEnvelope, "/oaep/"+hash, "RSA/None/OAEPWith"+hash+"AndMGF1Padding")
+        }
       }      
     }
+    
+    ignore("Decryption fails with signing key") {
+      val message = "Secure your digital life".getBytes
+      keyEnvelopes.filter(x => x.key.purpose != "encryption").map{ keyEnvelope =>
+        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+        info("RSA-" + keyLength + " key for " + keyEnvelope.key.purpose)
+        
+        val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelope.key.publicKey) )
+        val pipeline = sendReceive //~> unmarshal[JsendResponse]
+        val location = keyEnvelope.location
+        val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
+        whenReady(responseF) { response =>
+          assert(response.status.intValue === 404 )
+          //assert((response ~> unmarshal[JsendResponse]).status === "error")
+        }
+      }
+    }    
   }
   
   feature("Sign message") {
+    
     scenario("Sign message (RSA, PKCS#1 padding)") {
       keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
         signatureTest(keyEnvelope, "/pkcs1", "NONEwithRSA")
       }
     }
-    scenario("Sign message (RSA, PSS padding)") {
-      keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
-        signatureTest(keyEnvelope, "/pss/sha1", "RSASSA-PSS")
-      }      
+    
+    hashAlgorithms.filter(x => x != "md5").map{ hash => //MD5 doesn't work with SUN and BouncyCastle Security Provider
+      scenario("Sign message (RSA, PSS, "+hash+")") {
+        keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
+          if( !(keyEnvelope.key.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
+            signatureTest(keyEnvelope, "/pss/"+hash, hash+"withRSAandMGF1") //similar to "RSASSA-PSS"
+        }
+      }
     }
+    
+    scenario("Signing fails with encryption key") {
+      val message = "Secure your digital life".getBytes
+      keyEnvelopes.filter(x => x.key.purpose != "signing").map{ keyEnvelope =>
+        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+        info("RSA-" + keyLength + " key for " + keyEnvelope.key.purpose)
         
+        val request = SignRequest(message)
+        val pipeline = sendReceive //~> unmarshal[JsendResponse]
+        val location = keyEnvelope.location
+        val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/sign", request))
+        whenReady(responseF) { response =>
+          assert(response.status.intValue === 404 )
+          //assert((response ~> unmarshal[JsendResponse]).status === "error")
+        }
+      }
+    }
+    
     ignore("Perform SHA256 signature with imported key") {
     /*  val message = "secure your digital life"
       val request = PrivateKeyOperation("signature", message, Some("SHA-256"), Some("PKCS#1"))
