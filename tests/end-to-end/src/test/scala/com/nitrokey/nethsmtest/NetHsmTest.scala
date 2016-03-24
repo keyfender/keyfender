@@ -2,7 +2,7 @@ package com.nitrokey.nethsmtest
 
 import akka.actor.ActorSystem
 import Crypto._
-import org.scalatest.{FeatureSpec, GivenWhenThen, BeforeAndAfterAll, BeforeAndAfter}
+import org.scalatest.FeatureSpec
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Span, Seconds, Millis}
 import com.typesafe.scalalogging.LazyLogging
@@ -15,8 +15,14 @@ import NetHsmProtocol._
 import com.typesafe.config.ConfigFactory
 import java.io.File
 import collection.mutable.ListBuffer
+import spray.httpx.unmarshalling._
+import java.io.{ByteArrayInputStream, BufferedReader, Reader, InputStreamReader}
+import java.security.interfaces.RSAPublicKey
+import java.security.Security
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.openssl.PEMReader
 
-class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with GivenWhenThen with BeforeAndAfter {
+class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
 
   //Load settings
   //TODO: Handle IOException
@@ -127,9 +133,39 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
     scenario(s"Importing a RSA key for encryption") (pending)
     
     scenario(s"Importing a RSA key for authentication") (pending)
+    
+    ignore("Importing unsupported ECC key fails") {
+      val keyPair = generateRSACrtKeyPair(2048)
+      val request = KeyImport("signing", "ECC", keyPair.privateKey)
+      val pipeline: HttpRequest => Future[JsendResponse] = (
+        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
+        sendReceive ~> unmarshal[JsendResponse]
+      )
+      val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        assert(response.status === "error")
+        //TODO: assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+      }
+    }
+
+    ignore("Importing unsupported RSA key for purpose 'payment' fails") {
+      val keyPair = generateRSACrtKeyPair(2048)
+      val request = KeyImport("payment", "RSA", keyPair.privateKey)
+      val pipeline: HttpRequest => Future[JsendResponse] = (
+        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
+        sendReceive ~> unmarshal[JsendResponse]
+        //~> unmarshal[SimpleResponse]
+      )
+      val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        assert(response.status === "error")
+        //assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+      }
+    }
   }
   
   feature("Generate RSA keys") {
+    
     keyLengths.map{ keyLength =>
       scenario(s"Generate RSA-$keyLength key") {
         //Given("Key generation request")
@@ -159,6 +195,33 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
         }
       }
     }
+    
+    ignore("Generating unsupported ECC key fails") {
+      val request = KeyGeneration("signing", "ECC", 2048)
+      val pipeline: HttpRequest => Future[JsendResponse] = (
+        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
+        sendReceive ~> unmarshal[JsendResponse]
+      )
+      val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        assert(response.status === "error")
+        //TODO: assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+      }
+    }
+
+    ignore("Generating unsupported RSA key for purpose 'payment' fails") {
+      val request = KeyGeneration("payment", "RSA", 2048)
+      val pipeline: HttpRequest => Future[JsendResponse] = (
+        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
+        sendReceive ~> unmarshal[JsendResponse]
+        //~> unmarshal[SimpleResponse]
+      )
+      val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        assert(response.status === "error")
+        //assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+      }
+    }
   }
   
   feature("List existing keys") {
@@ -179,6 +242,25 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
       }
     }
     scenario("Test pagination") (pending)
+
+    scenario("Retrieve public keys in PEM format") {
+      keyEnvelopes.map{ keyEnvelope =>
+        info("Check for key " + keyEnvelope.location)
+        val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+        val responseF: Future[HttpResponse] = pipeline(Get(host + keyEnvelope.location + "/public.pem"))
+        whenReady(responseF) { response =>
+          val pubKey = response.entity.asString //Extracting the HTTP response body
+
+          //Check PEM public key
+          Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider())
+          val tube: ByteArrayInputStream = new ByteArrayInputStream(pubKey.getBytes())
+          val fRd: Reader = new BufferedReader(new InputStreamReader(tube))
+          val pr: PEMReader = new PEMReader(fRd) //BC 1.48 introduces PEMParser instead of PEMReader
+          val o = pr.readObject()
+          assert(o.isInstanceOf[RSAPublicKey])
+        }
+      }
+    }
   }
 
   feature("Decrypt message") {
@@ -213,7 +295,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
         val location = keyEnvelope.location
         val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
         whenReady(responseF) { response =>
-          assert(response.status.intValue === 404 )
+          assert(response.status.intValue === 405 )
           //assert((response ~> unmarshal[JsendResponse]).status === "error")
         }
       }
@@ -237,7 +319,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
       }
     }
     
-    scenario("Signing fails with encryption key") {
+    ignore("Signing fails with encryption key") {
       val message = "Secure your digital life".getBytes
       keyEnvelopes.filter(x => x.key.purpose != "signing").map{ keyEnvelope =>
         val keyLength = keyEnvelope.key.publicKey.modulus.length*8
@@ -246,26 +328,26 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
         val request = SignRequest(message)
         val pipeline = sendReceive //~> unmarshal[JsendResponse]
         val location = keyEnvelope.location
-        val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/sign", request))
+        val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
         whenReady(responseF) { response =>
-          assert(response.status.intValue === 404 )
+          assert(response.status.intValue === 405 )
           //assert((response ~> unmarshal[JsendResponse]).status === "error")
         }
       }
     }
     
-    ignore("Perform SHA256 signature with imported key") {
-    /*  val message = "secure your digital life"
-      val request = PrivateKeyOperation("signature", message, Some("SHA-256"), Some("PKCS#1"))
-      val pipeline: HttpRequest => Future[PrivateKeyOperationResponse] = (
-        //addCredentials(BasicHttpCredentials("user", userPassword))
-        sendReceive
-        ~> unmarshal[PrivateKeyOperationResponse]
-      )
+    ignore("Client performs SHA256 hash and NetHSM signs the hash") {
+      val cleartextMessage = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+      val messageHash = hash(cleartextMessage, "SHA256")
+      val request = SignRequest(messageHash)
+      val pipeline = sendReceive ~> unmarshal[SignResponse]
+      val keyEnvelope = keyEnvelopes.head
       val location = keyEnvelope.location
-      val f: Future[PrivateKeyOperationResponse] = pipeline(Post(s"$host$location", request))
-      val response = Await.result(f, timeout)
-      assert(verifySignature(message.getBytes, response.blob, keyEnvelope.key.publicKey, "SHA256WithRSA")) */
+      val responseF: Future[SignResponse] = pipeline(Post(s"$host$location/actions/pss/sign", request))
+      whenReady(responseF) { response =>
+        assert(response.status === "success")
+        assert(verifySignature(messageHash, response.data.signedMessage, keyEnvelope.key.publicKey, "NONEwithRSAandMGF1"))
+      }
     }
   }
   
@@ -358,9 +440,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
     val keyLength = keyEnvelope.key.publicKey.modulus.length*8
     info(s"A RSA key with $keyLength bit")
     
-    //implicit val encoding = base64Url.copy(strictPadding=true)
     //Given("An encrypted message")
-    val message = "Secure your digital life".getBytes
+    val message = "secure your digital life".getBytes
     val request = DecryptRequest( encrypt(message, cipherSuite, keyEnvelope.key.publicKey) )
     
     //When("Message is decrypted")
@@ -380,7 +461,13 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Giv
     info(s"A RSA key with $keyLength bit")
   
     //Given("A message")
-    val message = "Secure your digital life".getBytes
+    //val message = "Secure your digital life".getBytes
+    val cleartextMessage = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+
+    val message: Seq[Byte] = cipherSuite match {
+      case "NONEwithRSA" => hash(cleartextMessage, "sha256")
+      case _ => cleartextMessage.getBytes
+    }
     
     //When("Message is signed")
     val request = SignRequest(message)
