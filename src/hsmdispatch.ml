@@ -86,10 +86,11 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           ("key", Keyring.json_of_pub key)
         ])
       >>= fun json_l ->
-        let json_s = jsend_success (`List json_l) |> YB.pretty_to_string in
+        let json_s = jsend_success (`List json_l)
+          |> YB.pretty_to_string ~std:true in
         Wm.continue (`String json_s) rd
 
-    method allowed_methods rd =
+    method! allowed_methods rd =
       Wm.continue [`GET; `HEAD; `POST] rd
 
     method content_types_provided rd =
@@ -100,25 +101,25 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method content_types_accepted rd =
       Wm.continue [] rd
 
-    method process_post rd =
+    method! process_post rd =
       try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
         let key = YB.from_string body in
-        Keyring.add keyring key
+        Keyring.add keyring ~key
         >>= function
           | Keyring.Ok new_id ->
             let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
             let resp_body =
-              `String (jsend_success `Null |> YB.pretty_to_string) in
+              `String (jsend_success `Null |> YB.pretty_to_string ~std:true) in
             Wm.continue true { rd' with Wm.Rd.resp_body }
           | Keyring.Failure json ->
             let resp_body =
-              `String (jsend_failure json |> YB.pretty_to_string) in
+              `String (jsend_failure json |> YB.pretty_to_string ~std:true) in
             Wm.continue true { rd with Wm.Rd.resp_body }
       with
         | e ->
           let json = Printexc.to_string e |> jsend_error in
-          let resp_body = `String (YB.pretty_to_string json) in
+          let resp_body = `String (YB.pretty_to_string ~std:true json) in
           Wm.continue false { rd with Wm.Rd.resp_body }
   end
 
@@ -132,7 +133,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
           let key = YB.from_string body in
-          Keyring.put keyring (self#id rd) key
+          let id = self#id rd in
+          Keyring.put keyring ~id ~key
         >|= function
           | Keyring.Ok true -> jsend_success `Null
           | Keyring.Ok false -> assert false (* can't happen, because of
@@ -143,30 +145,33 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       end
       >>= fun jsend ->
       let resp_body =
-        `String (YB.pretty_to_string jsend)
+        `String (YB.pretty_to_string ~std:true jsend)
       in
       Wm.continue true { rd with Wm.Rd.resp_body }
 
     method private to_json rd =
-      Keyring.get keyring (self#id rd)
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
         | None     -> assert false
         | Some key -> let json = Keyring.json_of_pub key in
-          let json_s = jsend_success json |> YB.pretty_to_string in
+          let json_s = jsend_success json |> YB.pretty_to_string ~std:true in
           Wm.continue (`String json_s) rd
 
     method private to_pem rd =
-      Keyring.get keyring (self#id rd)
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
         | None     -> assert false
         | Some key -> let pem = Keyring.pem_of_pub key in
           Wm.continue (`String pem) rd
 
-    method allowed_methods rd =
+    method! allowed_methods rd =
       Wm.continue [`GET; `HEAD; `PUT; `DELETE] rd
 
-    method resource_exists rd =
-      Keyring.get keyring (self#id rd)
+    method! resource_exists rd =
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -182,12 +187,13 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         "application/json", self#of_json
       ] rd
 
-    method delete_resource rd =
-      Keyring.del keyring (self#id rd)
+    method! delete_resource  rd =
+      let id = self#id rd in
+      Keyring.del keyring ~id
       >>= fun deleted ->
         let resp_body =
           if deleted
-            then `String (jsend_success `Null |> YB.pretty_to_string)
+            then `String (jsend_success `Null |> YB.pretty_to_string ~std:true)
             else assert false (* can't happen, because of resource_exists *)
         in
         Wm.continue deleted { rd with Wm.Rd.resp_body }
@@ -202,18 +208,20 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private to_pem rd =
-      Keyring.get keyring (self#id rd)
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
         | None            -> assert false
         | Some key -> let pem = Keyring.pem_of_pub key in
           Wm.continue (`String pem) rd
 
 
-    method allowed_methods rd =
+    method! allowed_methods rd =
       Wm.continue [`GET] rd
 
-    method resource_exists rd =
-      Keyring.get keyring (self#id rd)
+    method! resource_exists rd =
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -236,7 +244,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
   class key_actions keyring = object(self)
     inherit [Cohttp_lwt_body.t] Wm.resource
 
-    method allowed_methods rd =
+    method! allowed_methods rd =
       Wm.continue [`POST] rd
 
     method content_types_provided rd =
@@ -247,8 +255,9 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method content_types_accepted rd =
       Wm.continue [] rd
 
-    method resource_exists rd =
-      Keyring.get keyring (self#id rd)
+    method! resource_exists rd =
+      let id = self#id rd in
+      Keyring.get keyring ~id
       >>= function
       | None   -> Wm.continue false rd
       | Some _ ->
@@ -257,17 +266,17 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Wm.continue true rd
       with
       | Failure msg ->
-        let resp_body = `String (jsend_error msg |> YB.pretty_to_string) in
+        let resp_body = `String (jsend_error msg |> YB.pretty_to_string ~std:true) in
         Wm.continue false { rd with Wm.Rd.resp_body }
       | e ->
         let resp_body = `String begin
           Printexc.to_string e
           |> jsend_error
-          |> YB.pretty_to_string
+          |> YB.pretty_to_string ~std:true
         end in
         Wm.continue false { rd with Wm.Rd.resp_body }
 
-    method process_post rd =
+    method! process_post rd =
       begin try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
@@ -278,7 +287,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | e -> Lwt.return (Printexc.to_string e |> jsend_error)
       end
       >>= fun jsend ->
-      let resp_body = `String (YB.pretty_to_string jsend) in
+      let resp_body = `String (YB.pretty_to_string ~std:true jsend) in
       Wm.continue true { rd with Wm.Rd.resp_body }
 
     method private action_dispatch_exn rd =
@@ -339,7 +348,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method private to_json rd =
       Wm.continue (`String "{\"status\":\"ok\"}") rd
 
-    method allowed_methods rd =
+    method! allowed_methods rd =
       Wm.continue [`GET] rd
 
     method content_types_provided rd =
