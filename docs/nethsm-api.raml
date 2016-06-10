@@ -1,152 +1,221 @@
-#%RAML 0.8
-title: Nitrokey NetHSM
-version: 0.1
-#baseUri: https://local/{version}
-baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/{version}
+#%RAML 1.0
+title: Nitrokey NetHSM API
+version: v1
+description: All <a href="https://tools.ietf.org/html/rfc4648#section-4">base64url</a> encoded values are Big Endian.
+baseUri: https://{hostName}:{hostPort}/api/{version}
+baseUriParameters:
+  hostName:
+    description: Host name or host IP address
+  hostPort:
+    description: Port of the host
+#baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/{version}
+protocols: HTTPS
+mediaType: application/json
+securitySchemes:
+  basic:
+    description: This API supports Basic Authentication.
+    type: Basic Authentication
+# Maybe describe which user role to use for each operation. See: http://forums.raml.org/t/allow-get-endpoint-to-be-both-secure-and-un-secure/1134/4
+
+types:
+  PrivateRsaKey:
+    type: object
+    properties:
+      primeP: string
+      primeQ: string
+      publicExponent: string
+  PublicRsaKey:
+    type: object
+    properties:
+      modulus: string
+      publicExponent: string
+  KeyImport:
+    type: object
+    properties:
+      purpose: string
+      algorithm: string
+      privateKey: PrivateRsaKey
+  KeyGeneration:
+    type: object
+    properties:
+      purpose: string
+      algorithm: string
+      length: integer
+
 /keys:
-  description: The keys being stored in the NetHSM. All <a href="https://tools.ietf.org/html/rfc4648#section-4">base64url</a> encoded values are Big Endian.
+  description: The keys being stored in the NetHSM
+  post:
+    description: Import or generate key pair in(to) NetHSM
+    securedBy: basic # Administrator
+    body:
+      application/json:
+        type: KeyImport | KeyGeneration
+        examples:
+          KeyImport:
+            purpose: "signing"
+            algorithm: "RSA"
+            privateKey:
+              primeP: "frtz7u89gft89uz"
+              primeQ: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+              publicExponent: "w367rg90jhj0asdf98gz"
+          KeyGeneration:
+              purpose: "signing"
+              algorithm: "RSA"
+              length: 2048
+    responses:
+      303:
+        headers:
+          Location:
+            example: /api/{version}/e345678uzt5678
+      404:
+      500:
   get:
-    description: Retrieve all public keys
+    description: Retrieve a list of all key locations.
+    securedBy: null
     responses:
       200:
         body:
           application/json:
-            schema: collectionPublicKey
-            example: |
-              [
-                {
-                  "location": "/api/v1/MGQ1NVbxki8iYPxmYV1r",
-                  "key": {
-                    "purpose": "signing",
-                    "algorithm": "RSA",
-                    "publicKey": {
-                      "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                      "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                    }
-                  }
-                },
-                {
-                  "location": "/api/v1/j843ig9045rji9g90",
-                  "key": {
-                    "purpose": "signing",
-                    "algorithm": "RSA",
-                    "publicKey": {
-                      "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                      "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                    }
-                  }
-                }
-              ]
-  /{keyId}:
+            type: object
+            properties:
+              location: string
+
+  /{keyLocation}:
     delete:
       description: Deletes key pair
-      queryParameters:
-        adminPassword:
-          displayName: Admin Password
-          type: string
-          description: The defined Admin Password is required for authentication. Minimum Length x, combination of TBD.
-          example: TODO
-          required: true
-      responses:
-        200:
-        404:
-        500:
-    put:
-      description: Generates key pair
-      queryParameters:
-        adminPassword:
-      body:
-        application/json:
-          schema: keyParameter
-          example: |
-            {
-              "purpose": "signing",
-              "algorithm": "RSA",
-              "length": 2048
-            }
+      securedBy: basic # Administrator
       responses:
         200:
         404:
         500:
     post:
-      description: Imports key pair into NetHSM
-      queryParameters:
-        adminPassword:
+      description: Import or generate key pair in(to) NetHSM in a specified location
+      securedBy: basic # Administrator
       body:
         application/json:
-          schema: keyPair
-          example: |
-            {
-              "purpose": "signing",
-              "algorithm": "RSA",
-              "privateKey": {
-                "primeP": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                "primeQ": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-              },
-            }
+          type: KeyImport | KeyGeneration
+          examples:
+            KeyImport:
+              purpose: "signing"
+              algorithm: "RSA"
+              privateKey:
+                primeP: "frtz7u89gft89uz"
+                primeQ: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+                publicExponent: "w367rg90jhj0asdf98gz"
+            KeyGeneration:
+                purpose: "signing"
+                algorithm: "RSA"
+                length: 2048
       responses:
-        303:
+        200:
         404:
         500:
-    /public:
-      description: The public key
+    get:
+      description: Retrieve public key
+      securedBy: null
+      responses:
+        200:
+          body:
+            application/json:
+              type: object
+              properties:
+                purpose: string
+                algorithm: string
+                publicKey: PublicRsaKey
+              example:
+                purpose: "signing"
+                algorithm: "RSA"
+                publicKey:
+                  modulus: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+                  publicExponent: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+
+    /public.pem:
+      description: Retrieve the public key in PEM format
       get:
         description: Retrieve Public Key
+        securedBy: null
         responses:
           200:
             body:
-              application/json:
-                schema: publicKey
-                example: |
-                  {
-                    "purpose": "signing",
-                    "algorithm": "RSA",
-                    "publicKey": {
-                      "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                      "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                    }
-                  }
-    /secret:
-      description: The secret key
+              application/json: # TODO
+
+    /actions/{decryptMode}/decrypt:
+      description: Decryption to be performed with the secret key
+      uriParameters:
+        decryptMode:
+          type: string
       post:
-        queryParameters:
-          userPassword:
-            displayName: User Password
-            type: string
-            description: User Password to authenticate the operation
-            example: fr5678iujhz789
-            required: true
-        description: Perform a signature or decryption operation on the secret key.
+        securedBy: basic # User
         body:
           application/json:
-            schema: keyOperation
-            example: |
-              {
-                "operation": "decrypting",
-                "blob": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                "padding": "pkcs#1",
-                "hashAlgorithm": "SHA256"
-              }
+            type: object
+            properties:
+              decrypted: string
+            example:
+              decrypted: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
         responses:
           200:
             body:
               application/json:
-                schema: operationResult
-                example: |
-                  {
-                    "result": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                  }
+                type: object
+                properties:
+                  status: string
+                  data:
+                    type: object
+                    properties:
+                      decrypted: string
+                example:
+                  status: "ok"
+                  data:
+                    decrypted: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
           404:
           500:
+
+    /actions/{signMode}/sign:
+      description: Signature to be performed with the secret key
+      uriParameters:
+        signMode:
+          type: string
+      post:
+        securedBy: basic # User
+        body:
+          application/json:
+            type: object
+            properties:
+              message: string
+            example:
+              message: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
+        responses:
+          200:
+            body:
+              application/json:
+                type: object
+                properties:
+                  status: string
+                  data:
+                    type: object
+                    properties:
+                      signedMessage: string
+                example:
+                  status: "ok"
+                  data:
+                    signedMessage: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
+          404:
+          500:
+
 /passwords:
     /admin:
-      description: Admin Password is required to authenticate system modifications.
+      description: Admin Password is required to authenticate system modifications. It has to be defined before a new device can be used.
       post:
-        queryParameters:
-          adminPassword:
-          newAdminPassword:
-        description: Change the password
+        description: Activate or change the password. Basic Authentication is required for changing but not activating.
+        securedBy: [null, basic] # Administrator
+        body:
+          application/json:
+            type: object
+            properties:
+              newPassword: string
+            example:
+              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
         responses:
           200:
           404:
@@ -154,17 +223,22 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
     /boot:
       description: The Boot Password is required to unlock a freshly booted system. It's optional. Alternatively the User Password is used.
       post:
-        queryParameters:
-          adminPassword or bootPassword:
-          newBootPassword:
-        description: Activate or change the password
+        description: Activate or change the password. Basic Authentication is required for changing but not activating.
+        securedBy: [null, basic] # Boot
+        body:
+          application/json:
+            type: object
+            properties:
+              newPassword: string
+            example:
+              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
         responses:
           200:
           404:
           500:
       delete:
         queryParameters:
-          adminPassword or bootPassword:
+        securedBy: basic # Administrator, Boot
         description: Deactivate the password
         responses:
           200:
@@ -173,10 +247,15 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
     /user:
       description: User Password is required to execute operations.
       post:
-        queryParameters:
-          userPassword or adminPassword:
-          newUserPassword:
-        description: Change the password
+        description: Activate or change the password.
+        securedBy: basic # Administrator, User
+        body:
+          application/json:
+            type: object
+            properties:
+              newPassword: string
+            example:
+              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
         responses:
           200:
           404:
@@ -184,16 +263,11 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
 /system:
   /firmware:
     post:
-      queryParameters:
-        adminPassword:
+      description: Update the firmware
+      securedBy: basic # Administrator
       body:
         application/json:
-          schema: firmware
-          example: |
-            {
-              "firmware": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-            }
-      description: Update the firmware
+          #TODO
       responses:
         200:
         500:
@@ -201,57 +275,54 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
       description: The version of the installed firmware.
       get:
         description: Retrieve the current firmware version
+        securedBy: null
         responses:
           200:
           500:
+
   /keys:
     description: Keys for the system.
     /firmware/public:
       description: The public key is used to verify signed firmware updates.
       get:
-        queryParameters:
-          adminPassword:
         description: Retrieve public key
+        securedBy: basic # Administrator
+        body:
+          application/json:
         responses:
           200:
             body:
               application/json:
-                schema: publicKey
-                example: |
-                  {
-                    "purpose": "signing",
-                    "algorithm": "RSA",
-                    "publicKey": {
-                      "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                      "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                    }
-                  }
+                type: object
+                properties:
+                  purpose: string
+                  algorithm: string
+                  publicKey: PublicRsaKey
+                example:
+                  purpose: "signing"
+                  algorithm: "RSA"
+                  publicKey:
+                    modulus: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+                    publicExponent: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
           404:
           500:
       post:
         description: Import the public key to the NetHSM
-        queryParameters:
-          adminPassword:
+        securedBy: basic # Administrator
         body:
           application/json:
-            schema: publicKey
-            example: |
-              {
-                "purpose": "signing",
-                "algorithm": "RSA",
-                "publicKey": {
-                  "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                  "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                }
-              }
+            type: object
+            properties:
+              purpose: string
+              algorithm: string
+              publicKey: PublicRsaKey
         responses:
           200:
           404:
           500:
       delete:
-        queryParameters:
-          adminPassword:
         description: Delete the public key. No firmware updates will be possible without a public key.
+        securedBy: basic # Administrator
         responses:
           200:
           404:
@@ -259,19 +330,23 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
     /tls:
       description: This key pair and certificate are used for HTTPS/TLS.
       post:
-        queryParameters:
-          adminPassword:
+        description: Import or generate a key pair in(to) the NetHSM.
+        securedBy: basic # Administrator
         body:
           application/json:
-            schema: keyPair
-        description: Import a key pair into the NetHSM.
-        responses:
-          200:
-          500:
-      put:
-        queryParameters:
-          adminPassword:
-        description: Generate a key pair in the NetHSM.
+            type: KeyImport | KeyGeneration
+            examples:
+              KeyImport:
+                purpose: "signing"
+                algorithm: "RSA"
+                privateKey:
+                  primeP: "frtz7u89gft89uz"
+                  primeQ: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+                  publicExponent: "w367rg90jhj0asdf98gz"
+              KeyGeneration:
+                  purpose: "signing"
+                  algorithm: "RSA"
+                  length: 2048
         responses:
           200:
           500:
@@ -283,30 +358,29 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
             200:
               body:
                 application/json:
-                  schema: publicKey
-                  example: |
-                    {
-                      "alg": "RSA",
-                      "publicKey": {
-                        "modulus": "FhJQl11CiY0ifRHXeAqFh4rdSl6",
-                        "publicExponent": "FhJQl11CiY0ifRHXeAqFh4rdSl6"
-                      }
-                    }
+                  type: object
+                  properties:
+                    purpose: string
+                    algorithm: string
+                    publicKey: PublicRsaKey
+                  example:
+                    purpose: "signing"
+                    algorithm: "RSA"
+                    publicKey:
+                      modulus: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
+                      publicExponent: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
             404:
       /certificate:
         description: The X.509 certificate
         get:
         post:
-          queryParameters:
-            adminPassword:
+          securedBy: basic # Administrator
           body:
-            application/json:
-              schema: certificate
+            #TODO
   /lock:
     description: Lock an unlocked system so that no operations are possible anymore until it is unlocked again.
     post:
-      queryParameters:
-        adminPassword or bootPassword or userPassword:
+      securedBy: basic # Administrator, Boot or User
   /name:
     description: The name of the system (e.g. NetHSM)
     get:
@@ -314,310 +388,62 @@ baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/
     /ipv4:
       get:
       post:
-        queryParameters:
-          adminPassword:
+        securedBy: basic # Administrator
         body:
-            application/json:
-              schema: ifConfig
-              example: |
-                {
-                  "ipaddress": "123.456.789.123",
-                  "subnetmask": "255.255.255.255",
-                  "broadcast": "1.1.1.1"
-                }
+          application/json:
+            type: object
+            properties:
+              address: string
+              netmask: string
+              gateway: string
+            example:
+              address: "123.456.789.123"
+              netmask: "255.255.255.255"
+              gateway: "1.1.1.1"
     /ipv6:
       get:
       post:
-        queryParameters:
-          adminPassword:
+        securedBy: basic # Administrator
         body:
-            application/json:
-              schema: ifConfig
+          application/json:
+            type: object
+            properties:
+              address: string
+              netmask: string
+              gateway: string
+            example:
+              address: "2001:0db8:0:f101::1/64"
+              netmask: "64"
+              gateway: "fe80::1"
   /reboot:
     description: Reboot the system
     post:
-        queryParameters:
-          adminPassword:
+      securedBy: basic # Administrator
   /serial:
     description: The system's serial number should be derived from some hardware serials (e.g. CPU ID).
     get:
   /status:
-    description: The system status.
+    description: The current system status.
     get:
+      securedBy: null
       responses:
         200:
           body:
             application/json:
-              schema: SimpleResponse
-              example: |
-                {
-                  "status": "OK"
-                }
+              type: object
+              properties:
+                status: string
+              example:
+                status: "ok"
 
   /shutdown:
     description: Shutdown and poweroff the system.
     post:
-      queryParameters:
-        adminPassword:
+      securedBy: basic # Administrator
   /unlock:
     description: Unlock and decrypt all critical data (e.g. keys) after a fresh boot or locking.
     post:
-      queryParameters:
-        bootPassword:
+      securedBy: basic # Boot
   /vendor:
     description: The vendor of the system (e.g. Nitrokey)
     get:
-
-schemas:
-  - firmware: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "firmware": {
-            "id": "http://jsonschema.net/firmware",
-            "type": "string"
-          }
-        },
-        "required": [
-          "firmware"
-        ]
-      }
-  - ifConfig: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "ipaddress": {
-            "id": "http://jsonschema.net/ipaddress",
-            "type": "string"
-          },
-          "subnetmask": {
-            "id": "http://jsonschema.net/subnetmask",
-            "type": "string"
-          },
-          "broadcast": {
-            "id": "http://jsonschema.net/broadcast",
-            "type": "string"
-          }
-        },
-        "required": [
-          "ipaddress",
-          "subnetmask",
-          "broadcast"
-        ]
-      }
-  - keyOperation: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "operation": {
-            "id": "http://jsonschema.net/operation",
-            "type": "string"
-          },
-          "blob": {
-            "id": "http://jsonschema.net/blob",
-            "type": "string"
-          },
-          "padding": {
-            "id": "http://jsonschema.net/padding",
-            "type": "string"
-          },
-          "hashAlgorithm": {
-            "id": "http://jsonschema.net/hashAlgorithm",
-            "type": "string"
-          }
-        },
-        "required": [
-          "operation",
-          "blob"
-        ]
-      }
-  - operationResult: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "result": {
-            "id": "http://jsonschema.net/result",
-            "type": "string"
-          }
-        },
-        "required": [
-          "result"
-        ]
-      }
-  - publicKey: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "purpose": {
-            "id": "http://jsonschema.net/purpose",
-            "type": "string"
-          },
-          "algorithm": {
-            "id": "http://jsonschema.net/algorithm",
-            "type": "string"
-          },
-          "publicKey": {
-            "id": "http://jsonschema.net/publicKey",
-            "type": "object",
-            "properties": {
-              "modulus": {
-                "id": "http://jsonschema.net/publicKey/modulus",
-                "type": "string"
-              },
-              "publicExponent": {
-                "id": "http://jsonschema.net/publicKey/publicExponent",
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "purpose",
-          "algorithm",
-          "publicKey"
-        ]
-      }
-  - collectionPublicKey: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "array",
-        "items": [
-          {
-            "id": "http://jsonschema.net/0",
-            "type": "object",
-            "properties": {
-              "purpose": {
-                "id": "http://jsonschema.net/0/purpose",
-                "type": "string"
-              },
-              "algorithm": {
-                "id": "http://jsonschema.net/0/algorithm",
-                "type": "string"
-              },
-              "publicKey": {
-                "id": "http://jsonschema.net/0/publicKey",
-                "type": "object",
-                "properties": {
-                  "modulus": {
-                    "id": "http://jsonschema.net/0/publicKey/modulus",
-                    "type": "string"
-                  },
-                  "publicExponent": {
-                    "id": "http://jsonschema.net/0/publicKey/publicExponent",
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "required": [
-              "purpose",
-              "algorithm",
-              "publicKey"
-            ]
-          },
-          {
-            "id": "http://jsonschema.net/1",
-            "type": "object",
-            "properties": {
-              "purpose": {
-                "id": "http://jsonschema.net/1/purpose",
-                "type": "string"
-              },
-              "algorithm": {
-                "id": "http://jsonschema.net/1/algorithm",
-                "type": "string"
-              },
-              "publicKey": {
-                "id": "http://jsonschema.net/1/publicKey",
-                "type": "object",
-                "properties": {
-                  "modulus": {
-                    "id": "http://jsonschema.net/1/publicKey/modulus",
-                    "type": "string"
-                  },
-                  "publicExponent": {
-                    "id": "http://jsonschema.net/1/publicKey/publicExponent",
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        ]
-      }
-  - keyPair: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "purpose": {
-            "id": "http://jsonschema.net/purpose",
-            "type": "string"
-          },
-          "algorithm": {
-            "id": "http://jsonschema.net/algorithm",
-            "type": "string"
-          },
-          "publicKey": {
-            "id": "http://jsonschema.net/publicKey",
-            "type": "object",
-            "properties": {
-              "modulus": {
-                "id": "http://jsonschema.net/publicKey/modulus",
-                "type": "string"
-              },
-              "publicExponent": {
-                "id": "http://jsonschema.net/publicKey/publicExponent",
-                "type": "string"
-              }
-            }
-          },
-          "privateExponent": {
-            "id": "http://jsonschema.net/privateExponent",
-            "type": "string"
-          }
-        },
-        "required": [
-          "purpose",
-          "algorithm",
-          "publicKey",
-          "privateExponent"
-        ]
-      }
-  - keyParameter: |
-      {
-        "$schema": "http://json-schema.org/draft-04/schema#",
-        "id": "http://jsonschema.net",
-        "type": "object",
-        "properties": {
-          "purpose": {
-            "id": "http://jsonschema.net/purpose",
-            "type": "string"
-          },
-          "algorithm": {
-            "id": "http://jsonschema.net/algorithm",
-            "type": "string"
-          },
-          "length": {
-            "id": "http://jsonschema.net/length",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "purpose",
-          "algorithm",
-          "length"
-        ]
-      }
