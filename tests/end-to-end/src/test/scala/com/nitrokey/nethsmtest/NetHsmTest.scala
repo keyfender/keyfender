@@ -130,11 +130,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       }
     }
     
-    scenario(s"Importing a RSA key for encryption") (pending)
+    scenario("Importing a RSA key for encryption") (pending)
     
-    scenario(s"Importing a RSA key for authentication") (pending)
+    scenario("Importing a RSA key for authentication") (pending)
     
-    ignore("Importing unsupported ECC key fails") {
+    scenario("Importing unsupported ECC key fails") {
       val keyPair = generateRSACrtKeyPair(2048)
       val request = KeyImport("signing", "ECC", keyPair.privateKey)
       val pipeline: HttpRequest => Future[JsendResponse] = (
@@ -143,12 +143,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        assert(response.status === "error")
-        //TODO: assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+        assert(response.status === "failure")
       }
     }
 
-    ignore("Importing unsupported RSA key for purpose 'payment' fails") {
+    ignore("Importing RSA key for unsupported purpose 'payment' fails") {
       val keyPair = generateRSACrtKeyPair(2048)
       val request = KeyImport("payment", "RSA", keyPair.privateKey)
       val pipeline: HttpRequest => Future[JsendResponse] = (
@@ -196,7 +195,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       }
     }
     
-    ignore("Generating unsupported ECC key fails") {
+    scenario("Generating unsupported ECC key fails") {
       val request = KeyGeneration("signing", "ECC", 2048)
       val pipeline: HttpRequest => Future[JsendResponse] = (
         //TODO: addCredentials(BasicHttpCredentials("admin", ""))
@@ -204,12 +203,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        assert(response.status === "error")
-        //TODO: assert(response.status.intValue !== 303 ) See FromResponseUnmarshaller
+        assert(response.status === "failure")
       }
     }
 
-    ignore("Generating unsupported RSA key for purpose 'payment' fails") {
+    ignore("Generating RSA key for unsupported purpose 'payment' fails") {
       val request = KeyGeneration("payment", "RSA", 2048)
       val pipeline: HttpRequest => Future[JsendResponse] = (
         //TODO: addCredentials(BasicHttpCredentials("admin", ""))
