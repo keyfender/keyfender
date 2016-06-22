@@ -38,6 +38,23 @@ module Action = struct
   ]
 end
 
+module Config = struct
+  type t =
+    | Pass_admin
+    | Pass_user
+  let settings = [
+    Pass_admin, ref "";
+    Pass_user, ref "";
+  ]
+  let set k v =
+    try let r = List.assoc k settings in
+      r := v ; true
+    with Not_found -> false
+  let get k =
+    try Some !(List.assoc k settings)
+    with Not_found -> None
+end
+
 let jsend_success data =
   let l = match data with
     | `Null -> []
@@ -73,6 +90,31 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     include Webmachine.Make(H.IO)
   end
 
+  let has_valid_credentials ~admin rd =
+    try
+      match Cohttp.Header.get_authorization rd.Wm.Rd.req_headers with
+        | None -> raise Not_found
+        | Some credentials ->
+      match credentials with
+        | `Other _ -> raise Not_found
+        | `Basic (id, pass) ->
+      if match (admin, id) with
+        | _, "admin" -> pass <> "" && Some pass = Config.get Config.Pass_admin
+        | false, _ -> pass <> "" && Some pass = Config.get Config.Pass_user
+        | true, _ -> false
+      then `Authorized
+      else raise (Failure "wrong password")
+    with _ -> `Basic "nethsm"
+
+  let is_authorized_as_user rd =
+    if Some "" <> Config.get Config.Pass_user
+    then has_valid_credentials ~admin:false rd
+    else `Authorized
+  let is_authorized_as_admin rd =
+    if Some "" <> Config.get Config.Pass_admin
+    then has_valid_credentials ~admin:true rd
+    else `Authorized
+
   (** A resource for querying all the keys in the database via GET and creating
       a new key via POST. Check the [Location] header of a successful POST
       response for the URI of the key. *)
@@ -92,6 +134,13 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
     method! allowed_methods rd =
       Wm.continue [`GET; `HEAD; `POST] rd
+
+    method! is_authorized rd =
+      let result = match rd.Wm.Rd.meth with
+        | `GET -> is_authorized_as_user rd
+        | _ -> is_authorized_as_admin rd
+      in
+      Wm.continue result rd
 
     method content_types_provided rd =
       Wm.continue [
@@ -176,6 +225,13 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
 
+    method! is_authorized rd =
+      let result = match rd.Wm.Rd.meth with
+        | `GET -> is_authorized_as_user rd
+        | _ -> is_authorized_as_admin rd
+      in
+      Wm.continue result rd
+
     method content_types_provided rd =
       Wm.continue [
         "application/json", self#to_json;
@@ -215,7 +271,6 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | Some key -> let pem = Keyring.pem_of_pub key in
           Wm.continue (`String pem) rd
 
-
     method! allowed_methods rd =
       Wm.continue [`GET] rd
 
@@ -225,6 +280,13 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
+
+    method! is_authorized rd =
+      let result = match rd.Wm.Rd.meth with
+        | `GET -> is_authorized_as_user rd
+        | _ -> is_authorized_as_admin rd
+      in
+      Wm.continue result rd
 
     method content_types_provided rd =
       Wm.continue [
@@ -275,6 +337,9 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           |> YB.pretty_to_string ~std:true
         end in
         Wm.continue false { rd with Wm.Rd.resp_body }
+
+    method! is_authorized rd =
+      Wm.continue (is_authorized_as_user rd) rd
 
     method! process_post rd =
       begin try
@@ -341,7 +406,65 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
   end (* key actions *)
 
-  (** A resource for querying system config *)
+  (** A resource for passwords *)
+  class passwords = object(self)
+    inherit [Cohttp_lwt_body.t] Wm.resource
+
+    method private of_json rd =
+      begin try
+        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        >>= fun body ->
+          let new_password = YB.from_string body
+            |> YB.Util.member "newPassword"
+            |> YB.Util.to_string
+          in
+          let uid = self#uid rd in
+          if match uid with
+            | "admin" -> Config.set Config.Pass_admin new_password
+            | _ -> Config.set Config.Pass_user new_password
+          then Lwt.return (jsend_success `Null)
+          else assert false (* can't happen *)
+      with
+        | _ -> Lwt.return (jsend_failure (`Assoc [
+          ("description", `String "JSON keys are missing");
+          ("missing", `List [`String "newPassword"])
+        ]))
+      end
+      >>= fun jsend ->
+      let resp_body =
+        `String (YB.pretty_to_string ~std:true jsend)
+      in
+      Wm.continue true { rd with Wm.Rd.resp_body }
+
+    method! allowed_methods rd =
+      Wm.continue [`PUT] rd
+
+    method! is_authorized rd =
+      let uid = self#uid rd in
+      let pw_set = Some "" <> Config.get Config.Pass_admin in
+      let result = match (uid, pw_set) with
+        | "admin", true -> is_authorized_as_admin rd
+        | "admin", false -> `Authorized
+        | _, _ -> is_authorized_as_user rd
+      in
+      Wm.continue result rd
+
+    method content_types_provided rd =
+      Wm.continue [
+        "application/json", Wm.continue (`Empty);
+      ] rd
+
+    method content_types_accepted rd =
+      Wm.continue [
+        "application/json", self#of_json
+      ] rd
+
+    method private uid rd =
+      Wm.Rd.lookup_path_info_exn "uid" rd
+  end
+
+
+  (** A resource for querying system status *)
   class status = object(self)
     inherit [Cohttp_lwt_body.t] Wm.resource
 
@@ -378,6 +501,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       (api_prefix ^ "/keys/:id/actions/:padding/:hash_type/:action",
         fun () -> new key_actions keyring) ;
       (api_prefix ^ "/system/status", fun () -> new status) ;
+      (api_prefix ^ "/system/passwords/:uid", fun () -> new passwords) ;
     ] in
     let callback _ request body =
       let open Cohttp in
@@ -397,7 +521,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
          *  [$ DEBUG_PATH= ./crud_lwt.native]
          *
          *)
-        let path =
+        let debug_path =
           match Sys.getenv "DEBUG_PATH" with
           | _ -> Printf.sprintf " - %s" (String.concat ", " path)
           | exception Not_found   -> ""
@@ -418,7 +542,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
           (Code.code_of_status status)
           (Code.string_of_method (Request.meth request))
           (Uri.path (Request.uri request))
-          path debug_out;
+          debug_path debug_out;
         (* Finally, send the response to the client *)
         H.respond ~headers ~body ~status ()
     in
