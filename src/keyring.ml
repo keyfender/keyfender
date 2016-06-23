@@ -1,6 +1,6 @@
 open Lwt.Infix
 
-exception Failure of Yojson.Basic.json
+exception Failure_exn of Yojson.Basic.json
 
 type 'a result =
   | Ok of 'a
@@ -16,8 +16,6 @@ module Priv = struct
     data: data;
   }
 end
-
-type priv = Priv.t
 
 module Pub = struct
   type data =
@@ -43,17 +41,17 @@ type storage = (string * Priv.t) list Lwt_mvar.t
 
 (* helper functions *)
 
-let failwith json:YB.json =
-  raise (Failure json)
+(* let failwith json:YB.json =
+  raise (Failure_exn json) *)
 
 let failwith_desc desc =
-  raise (Failure (`Assoc [
+  raise (Failure_exn (`Assoc [
     ("description", `String desc)
   ]))
 
 let failwith_missing keys =
   let l = List.map (fun x -> `String x) keys in
-  raise (Failure (`Assoc [
+  raise (Failure_exn (`Assoc [
     ("description", `String "JSON keys are missing");
     ("missing", `List l)
   ]))
@@ -68,20 +66,20 @@ let pub_of_priv { Priv.purpose; data } =
   in
   { Pub.purpose; data }
 
-let trim_tail s =
+(* let trim_tail s =
   let rec f n = if n>=0 && s.[n]='\000' then f (pred n) else n in
   let len = String.length s |> pred |> f |> succ in
-  String.sub s 0 len
+  String.sub s 0 len *)
 
 let b64_encode = B64.encode ~alphabet:B64.uri_safe_alphabet
 
 let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
 
 let b64_of_z z =
-  Nocrypto.Numeric.Z.to_cstruct_be z |> Cstruct.to_string |> b64_encode
+  b64_encode (Cstruct.to_string (Nocrypto.Numeric.Z.to_cstruct_be z))
 
 let z_of_b64 s =
-  b64_decode s |> Cstruct.of_string |> Nocrypto.Numeric.Z.of_cstruct_be
+  Nocrypto.Numeric.Z.of_cstruct_be (Cstruct.of_string (b64_decode s))
 
 (* let pq_of_ned n e d =
   let open Z in
@@ -114,7 +112,7 @@ let rsa_priv_of_json json =
   let e = string_of_json_key json "publicExponent" |> z_of_b64 in
   let p = string_of_json_key json "primeP" |> z_of_b64 in
   let q = string_of_json_key json "primeQ" |> z_of_b64 in
-  Priv.Rsa (Nocrypto.Rsa.priv_of_primes e p q)
+  Priv.Rsa (Nocrypto.Rsa.priv_of_primes ~e ~p ~q)
 
 let priv_of_json json =
   let purpose = string_of_json_key json "purpose" in
@@ -213,7 +211,7 @@ end
 
 (******************** public functions ********************)
 
-let pem_of_pub { Pub.data } =
+let pem_of_pub { Pub.data ; _ } =
   let Pub.Rsa k = data in
   `RSA k |> X509.Encoding.Pem.Public_key.to_pem_cstruct1 |> Cstruct.to_string
 
@@ -239,13 +237,13 @@ let add ks ~key =
   try
     priv_of_json key |> Db.add ks >|= fun x -> Ok x
   with
-  | Failure json -> Lwt.return (Failure json)
+  | Failure_exn json -> Lwt.return (Failure json)
 
 let put ks ~id ~key =
   try
     priv_of_json key |> Db.put ks id >|= fun x -> Ok x
   with
-  | Failure json -> Lwt.return (Failure json)
+  | Failure_exn json -> Lwt.return (Failure json)
 
 let del ks ~id = Db.delete ks id
 
@@ -263,38 +261,39 @@ let decrypt ks ~id ~padding ~data =
   try
     let encrypted =
       try
-        YB.Util.member "encrypted" data
-        |> YB.Util.to_string
-        |> b64_decode
-        |> Cstruct.of_string
+        let decoded = YB.Util.member "encrypted" data
+          |> YB.Util.to_string
+          |> b64_decode
+        in
+        Cstruct.of_string decoded
       with
         | YB.Util.Type_error _
           -> failwith_missing ["encrypted"]
     in
     let decrypted_opt =
       try match (key, padding) with
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.None)
+      | ({ Priv.data=(Priv.Rsa key); _ }, Padding.None)
         -> Some (Nocrypto.Rsa.decrypt ~key ~mask:`Yes encrypted)
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1)
+      | ({ Priv.data=(Priv.Rsa key); _ }, Padding.PKCS1)
         -> Nocrypto.Rsa.PKCS1.decrypt ~key ~mask:`Yes encrypted
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.OAEP h) ->
+      | ({ Priv.data=(Priv.Rsa key); _ }, Padding.OAEP h) ->
         let module H = (val (Nocrypto.Hash.module_of h)) in
         let module OAEP = (Nocrypto.Rsa.OAEP(H)) in
         OAEP.decrypt ~key ~mask:`Yes encrypted
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.PSS _)
+      | ({ Priv.data=(Priv.Rsa _); _ }, Padding.PSS _)
         -> failwith_desc "PSS padding not available for decryption"
       with Nocrypto.Rsa.Insufficient_key
         -> failwith_desc "insufficient key for message"
     in
     match decrypted_opt with
       | Some decrypted ->
-        let decrypted_b64 = Cstruct.to_string decrypted |> b64_encode in
+        let decrypted_b64 = b64_encode (Cstruct.to_string decrypted) in
         Ok (`Assoc [
           ("decrypted", `String decrypted_b64)
         ])
       | None -> failwith_desc "decryption failed"
   with
-    | Failure json -> Failure json
+    | Failure_exn json -> Failure json
 
 let sign ks ~id ~padding ~data =
   Db.get ks id
@@ -303,30 +302,31 @@ let sign ks ~id ~padding ~data =
   try
     let message =
       try
-        YB.Util.member "message" data
-        |> YB.Util.to_string
-        |> b64_decode
-        |> Cstruct.of_string
+        let decoded = YB.Util.member "message" data
+          |> YB.Util.to_string
+          |> b64_decode
+        in
+        Cstruct.of_string decoded
       with
         | YB.Util.Type_error _
           -> failwith_missing ["message"]
     in
     let signed =
       try match (key, padding) with
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.PKCS1) ->
+      | ({ Priv.data=(Priv.Rsa key); _ }, Padding.PKCS1) ->
         Nocrypto.Rsa.PKCS1.sig_encode ~key ~mask:`Yes message
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.PSS h) ->
+      | ({ Priv.data=(Priv.Rsa key); _ }, Padding.PSS h) ->
         let module H = (val (Nocrypto.Hash.module_of h)) in
         let module PSS = (Nocrypto.Rsa.PSS(H)) in
         PSS.sign ~key message
-      | ({ Priv.data=(Priv.Rsa key) }, Padding.OAEP _)
+      | ({ Priv.data=(Priv.Rsa _); _ }, Padding.OAEP _)
         -> failwith_desc "OAEP padding not available for signing"
       | (_, Padding.None)
         -> failwith_desc "padding required for signing"
       with Nocrypto.Rsa.Insufficient_key
         -> failwith_desc "insufficient key for message"
     in
-    let signed_b64 = Cstruct.to_string signed |> b64_encode in
+    let signed_b64 = b64_encode (Cstruct.to_string signed) in
       Ok (`Assoc ["signedMessage", `String signed_b64])
   with
-    | Failure json -> Failure json
+    | Failure_exn json -> Failure json
