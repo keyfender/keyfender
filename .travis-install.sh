@@ -40,6 +40,11 @@ opam init
 opam update -u
 eval $(opam config env)
 
+# pin cohttp to 0.20.2 until
+# https://github.com/inhabitedtype/ocaml-webmachine/issues/58
+# is fixed
+opam pin add cohttp 0.20.2
+
 # install mirage
 opam install mirage
 
