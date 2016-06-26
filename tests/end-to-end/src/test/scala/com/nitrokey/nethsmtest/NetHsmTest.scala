@@ -65,6 +65,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("Password management") {
+
+    scenario("Any operation requires set password") {
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("user", ""))
+        ~> sendReceive
+      )
+      val f: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys"))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
     scenario("Set temporary admin password") {
       val request = PasswordChange(tempAdminPassword) //New password
       val pipeline: HttpRequest => Future[SimpleResponse] = (
@@ -111,7 +122,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("RSA key import") {
-    
+
     scenario("Key import requires authentication") {
       val keyPair = generateRSACrtKeyPair(1024)
       val request = KeyImport("signing", "RSA", keyPair.privateKey)
@@ -292,7 +303,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("List existing keys") {
-    
+
     scenario("List existing keys requires (user) authentication") {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys"))
@@ -316,7 +327,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         }
       }
     }
-    
+
     scenario("Test pagination") (pending)
 
     scenario("Retrieving public key requires (user) authentication") {
@@ -392,7 +403,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 */
   feature("Decrypt message") {
-    
+
     scenario("Decryption requires (user) authentication") {
       val message = "secure your digital life".getBytes
       val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelopes.head.key.publicKey) )
@@ -402,7 +413,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val response = Await.result(f, timeout)
       assert(response.status.intValue === 401)  // unauthorized
     }
-  
+
     scenario("Decrypt message (RSA, no padding)") {
       keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
         decryptionTest(keyEnvelope, "", "RSA/NONE/NoPadding")
@@ -455,7 +466,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val response = Await.result(f, timeout)
       assert(response.status.intValue === 401)  // unauthorized
     }
-    
+
     scenario("Sign message (RSA, PKCS#1 padding)") {
       keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
         signatureTest(keyEnvelope, "/pkcs1", "NONEwithRSA")
