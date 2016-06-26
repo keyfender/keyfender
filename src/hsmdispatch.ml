@@ -106,14 +106,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       else raise (Failure "wrong password")
     with _ -> `Basic "nethsm"
 
-  let is_authorized_as_user rd =
-    if Some "" <> Config.get Config.Pass_user
-    then has_valid_credentials ~admin:false rd
-    else `Authorized
-  let is_authorized_as_admin rd =
-    if Some "" <> Config.get Config.Pass_admin
-    then has_valid_credentials ~admin:true rd
-    else `Authorized
+  let is_authorized_as_user rd = has_valid_credentials ~admin:false rd
+  let is_authorized_as_admin rd = has_valid_credentials ~admin:true rd
 
   (** A resource for querying all the keys in the database via GET and creating
       a new key via POST. Check the [Location] header of a successful POST
