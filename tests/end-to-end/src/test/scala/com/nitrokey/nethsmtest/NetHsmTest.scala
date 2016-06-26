@@ -43,7 +43,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
 
   //Define values for the test scenarios
   val rand = new scala.util.Random
-  val keyLengths = List(1024) //, 2048, 3072, 4096)
+  val keyLengths = List(1024, 2048, 3072, 4096)
   val hashAlgorithms = List("md5", "sha1", "sha224", "sha256", "sha384", "sha512")
   val keyEnvelopes = new ListBuffer[PublicKeyEnvelope]
   val tempAdminPassword = "bla"
