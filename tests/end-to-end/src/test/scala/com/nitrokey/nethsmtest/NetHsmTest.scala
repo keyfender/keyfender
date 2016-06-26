@@ -43,7 +43,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
 
   //Define values for the test scenarios
   val rand = new scala.util.Random
-  val keyLengths = List(1024, 2048, 3072, 4096)
+  val keyLengths = List(1024) //, 2048, 3072, 4096)
   val hashAlgorithms = List("md5", "sha1", "sha224", "sha256", "sha384", "sha512")
   val keyEnvelopes = new ListBuffer[PublicKeyEnvelope]
   val tempAdminPassword = "bla"
@@ -65,10 +65,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("Password management") {
-    scenario("Set blank admin password") {
-      val request = PasswordChange(tempAdminPassword)
+    scenario("Set temporary admin password") {
+      val request = PasswordChange(tempAdminPassword) //New password
       val pipeline: HttpRequest => Future[SimpleResponse] = (
-        sendReceive
+        addCredentials(BasicHttpCredentials("admin", ""))
+        ~> sendReceive
         ~> unmarshal[SimpleResponse]
       )
       val f: Future[SimpleResponse] = pipeline(Put(s"$apiLocation/system/passwords/admin", request))
@@ -96,7 +97,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       assert(response.status === "success") //TODO: Change to "ok" to be consistent
     }
 
-    scenario("Set blank user password") {
+    scenario("Set user password") {
       val request = PasswordChange(userPassword)
       val pipeline: HttpRequest => Future[SimpleResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
@@ -110,6 +111,28 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("RSA key import") {
+    
+    scenario("Key import requires authentication") {
+      val keyPair = generateRSACrtKeyPair(1024)
+      val request = KeyImport("signing", "RSA", keyPair.privateKey)
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
+    scenario("Key import requires admin authentication") {
+      val keyPair = generateRSACrtKeyPair(1024)
+      val request = KeyImport("signing", "RSA", keyPair.privateKey)
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("user", userPassword))
+        ~> sendReceive
+      )
+      val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
     val purpose = "encryption"
     keyLengths.map{ keyLength =>
 
@@ -188,6 +211,25 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
 
   feature("Generate RSA keys") {
 
+    scenario("Key generation requires authentication") {
+      val request = KeyGeneration("signing", "RSA", 1024)
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
+    scenario("Key generation requires admin authentication") {
+      val request = KeyGeneration("signing", "RSA", 1024)
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("user", userPassword))
+        ~> sendReceive
+      )
+      val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
     keyLengths.map{ keyLength =>
       scenario(s"Generate RSA-$keyLength key") {
         //Given("Key generation request")
@@ -250,6 +292,14 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("List existing keys") {
+    
+    scenario("List existing keys requires (user) authentication") {
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys"))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
     scenario("List existing keys and check for given keys") {
       keyEnvelopes.map{ keyEnvelope =>
         info("Check for key " + keyEnvelope.location)
@@ -266,7 +316,15 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         }
       }
     }
+    
     scenario("Test pagination") (pending)
+
+    scenario("Retrieving public key requires (user) authentication") {
+        val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+        val f: Future[HttpResponse] = pipeline(Get(host + keyEnvelopes.head.location + "/public.pem"))
+        val response = Await.result(f, timeout)
+        assert(response.status.intValue === 401)  // unauthorized
+      }
 
     scenario("Retrieve public keys in PEM format") {
       keyEnvelopes.map{ keyEnvelope =>
@@ -334,6 +392,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 */
   feature("Decrypt message") {
+    
+    scenario("Decryption requires (user) authentication") {
+      val message = "secure your digital life".getBytes
+      val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelopes.head.key.publicKey) )
+      val location = keyEnvelopes.head.location
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+  
     scenario("Decrypt message (RSA, no padding)") {
       keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
         decryptionTest(keyEnvelope, "", "RSA/NONE/NoPadding")
@@ -377,6 +446,16 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
 
   feature("Sign message") {
 
+    scenario("Signing requires (user) authentication") {
+      val cleartextMessage = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+      val request = SignRequest(hash(cleartextMessage, "sha256"))
+      val location = keyEnvelopes.head.location
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+    
     scenario("Sign message (RSA, PKCS#1 padding)") {
       keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
         signatureTest(keyEnvelope, "/pkcs1", "NONEwithRSA")
@@ -431,6 +510,26 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
   }
 
   feature("Delete RSA key") {
+
+    scenario("Deleting key requires authentication") {
+      val location = keyEnvelopes.head.location
+      val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
+      val f: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
+    scenario("Deleting key requires admin authentication") {
+      val location = keyEnvelopes.head.location
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("user", userPassword))
+        ~> sendReceive
+      )
+      val f: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
+      val response = Await.result(f, timeout)
+      assert(response.status.intValue === 401)  // unauthorized
+    }
+
     scenario("Delete RSA key") {
       keyEnvelopes.map{ keyEnvelope =>
         val keyLength = keyEnvelope.key.publicKey.modulus.length*8
@@ -523,6 +622,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       }}
     }
 
+  }
+
+  scenario("Void admin password as preparation for next test run.") {
+    val request = PasswordChange("")
+    val pipeline: HttpRequest => Future[SimpleResponse] = (
+      addCredentials(BasicHttpCredentials("admin", adminPassword))
+      ~> sendReceive
+      ~> unmarshal[SimpleResponse]
+    )
+    val f: Future[SimpleResponse] = pipeline(Put(s"$apiLocation/system/passwords/admin", request))
+    val response = Await.result(f, timeout)
   }
 
   def decryptionTest(keyEnvelope: PublicKeyEnvelope, parameter: String, cipherSuite: String) = {
