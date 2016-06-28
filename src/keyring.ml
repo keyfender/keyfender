@@ -251,8 +251,8 @@ let get ks ~id = Db.get ks id >|= function
   | None -> None
   | Some k -> Some (pub_of_priv k)
 
-let get_all ks = Db.get_all ks >|= List.map (fun (id, key) ->
-    (id, pub_of_priv key))
+let get_all ks = Db.get_all ks >|= List.map (fun (id, _) ->
+    id)
 
 let decrypt ks ~id ~padding ~data =
   Db.get ks id

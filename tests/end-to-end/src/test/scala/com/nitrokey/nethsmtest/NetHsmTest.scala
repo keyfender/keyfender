@@ -314,12 +314,12 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
     scenario("List existing keys and check for given keys") {
       keyEnvelopes.map{ keyEnvelope =>
         info("Check for key " + keyEnvelope.location)
-        val pipeline: HttpRequest => Future[PublicKeyEnvelopeResponse] = (
+        val pipeline: HttpRequest => Future[PublicKeyListResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive
-          ~> unmarshal[PublicKeyEnvelopeResponse]
+          ~> unmarshal[PublicKeyListResponse]
         )
-        val responseF: Future[PublicKeyEnvelopeResponse] = pipeline(Get(s"$apiLocation/keys"))
+        val responseF: Future[PublicKeyListResponse] = pipeline(Get(s"$apiLocation/keys"))
         whenReady(responseF) { response =>
           assert(response.status === "success")
           assert(response.data.length > 0)

@@ -117,9 +117,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
 
     method private to_json rd =
       Keyring.get_all keyring
-      >|= List.map (fun (id, key) -> `Assoc [
-          ("location", `String (api_prefix ^ "/keys/" ^ id));
-          ("key", Keyring.json_of_pub key)
+      >|= List.map (fun id -> `Assoc [
+          ("location", `String (api_prefix ^ "/keys/" ^ id))
         ])
       >>= fun json_l ->
         let json_s = jsend_success (`List json_l)

@@ -17,17 +17,17 @@ import java.security.KeyFactory
 //import Crypto.dropLeadingZero
 
 /**
- * The JSON classes we use with the API. 
- * Notice that we can use the same object and the same JSON mapping as we defined in the API. 
+ * The JSON classes we use with the API.
+ * Notice that we can use the same object and the same JSON mapping as we defined in the API.
  */
 object NetHsmProtocol extends DefaultJsonProtocol {
 
   implicit val encoding = base64Url.copy(strictPadding=true)
-  
+
 /*TODO: Get this generic conversion working and replace the objects below with a single-line jsonFormatX.
      implicit object SeqByte extends JsonFormat[Seq[Byte]] {
       def write(c: Seq[Byte]) = JsString(c.toBase64)
-  
+
       def read(value: JsValue) = value match {
         case JsString(number) => number.getBytes.toArray
         case _ => deserializationError("Seq[Byte] expected")
@@ -35,8 +35,8 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     } */
 
   case class JsendResponse(status: String, data: JsValue)
-  implicit val JsendResponseFormat = jsonFormat2(JsendResponse)  
-  
+  implicit val JsendResponseFormat = jsonFormat2(JsendResponse)
+
   case class NkPublicRsaKey(modulus: Seq[Byte], publicExponent: Seq[Byte]) {
     def javaPublicKey: PublicKey = {
       val publicKeySpec = new RSAPublicKeySpec(new BigInteger(1, modulus.toArray), new BigInteger(1, publicExponent.toArray))
@@ -69,7 +69,7 @@ object NetHsmProtocol extends DefaultJsonProtocol {
    */
   implicit object NkPrivateRsaKey extends RootJsonFormat[NkPrivateRsaKey] {
     def write(x: NkPrivateRsaKey) = JsObject(
-      "primeP" -> JsString(x.primeP.toBase64), 
+      "primeP" -> JsString(x.primeP.toBase64),
       "primeQ" -> JsString(x.primeQ.toBase64),
       "publicExponent" -> JsString(x.publicExponent.toBase64)
     )
@@ -81,23 +81,26 @@ object NetHsmProtocol extends DefaultJsonProtocol {
         case _ => deserializationError("PrivateRSAKey expected")
       }
     }
-  } 
+  }
 
   case class NkPublicKey(purpose: String, algorithm: String, publicKey: NkPublicRsaKey)
   implicit val PublicKeyFormat = jsonFormat3(NkPublicKey)
-  
+
   case class NkPublicKeyResponse(status: String, data: NkPublicKey)
   implicit val PublicKeyResponseFormat = jsonFormat2(NkPublicKeyResponse)
-  
+
   case class PublicKeyEnvelope(location: String, key: NkPublicKey)
   implicit val PublicKeyEnvelopeFormat = jsonFormat2(PublicKeyEnvelope)
-  
-  case class PublicKeyEnvelopeResponse(status: String, data: List[PublicKeyEnvelope])
-  implicit val PublicKeyEnvelopeResponseFormat = jsonFormat2(PublicKeyEnvelopeResponse)
-  
+
+  case class PublicKeyLocation(location: String)
+  implicit val PublicKeyLocationFormat = jsonFormat1(PublicKeyLocation)
+
+  case class PublicKeyListResponse(status: String, data: List[PublicKeyLocation])
+  implicit val PublicKeyListResponseFormat = jsonFormat2(PublicKeyListResponse)
+
   case class PasswordChange(newPassword: String)
   implicit val PasswordChangeFormat = jsonFormat1(PasswordChange)
-  
+
   case class SimpleResponse(status: String)
   implicit val SystemStatusFormat = jsonFormat1(SimpleResponse)
 
@@ -131,7 +134,7 @@ object NetHsmProtocol extends DefaultJsonProtocol {
 
   case class DecryptResponse(status: String, data: Decrypted)
   implicit val DecryptResponseFormat = jsonFormat2(DecryptResponse)
-  
+
   case class SignRequest(message: Seq[Byte])
   implicit object SignRequest extends RootJsonFormat[SignRequest] {
     def write(x: SignRequest) = JsObject(
@@ -161,17 +164,17 @@ object NetHsmProtocol extends DefaultJsonProtocol {
   }
   case class SignResponse(status: String, data: Signed)
   implicit val SignResponseFormat = jsonFormat2(SignResponse)
- 
+
   case class KeyImport(purpose: String, algorithm: String, privateKey: NkPrivateRsaKey)
   implicit val KeyImportFormat = jsonFormat3(KeyImport)
-  
+
   case class PrivateKeyOperation(operation: String, blob: String, padding: Option[String] = None, hashAlgorithm: Option[String] = None)
   implicit val privateKeyOperationFormat = jsonFormat4(PrivateKeyOperation)
-  
+
   case class KeyGeneration(purpose: String, algorithm: String, length: Int)
   implicit val keyGenerationFormat = jsonFormat3(KeyGeneration)
-  
+
   case class PrivateKeyOperationResponse(blob: Seq[Byte])
   implicit val privateKeyOperationResponseFormat = jsonFormat1(PrivateKeyOperationResponse)
-  
+
 }
