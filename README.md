@@ -31,7 +31,5 @@ And then run the VM via `xl create -c nethsm.xl`
 
 # API
 
-The API is described in "docs" folder. The HTML is generate from the RAML file. To update follow these steps:
+The API is described in "docs" folder. You can view it in the browser [here](https://www.nitrokey.com/sites/default/files/nethsm/api.html).
 
-1. sudo npm i -g git+https://git@github.com/raml2html/raml2html.git\#raml1.0
-2. raml2html -i nethsm-api.raml -o nethsm-api.html

@@ -73,7 +73,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys"))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Set temporary admin password") {
@@ -85,7 +85,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[SimpleResponse] = pipeline(Put(s"$apiLocation/system/passwords/admin", request))
       val response = Await.result(f, timeout)
-      assert(response.status === "success") //TODO: Change to "ok" to be consistent
+      assert(response.status === "success")
     }
 
     scenario("Changing admin password requires authentication") {
@@ -93,7 +93,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Put(s"$apiLocation/system/passwords/admin", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Changing admin password again") {
@@ -105,7 +105,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[SimpleResponse] = pipeline(Put(s"$apiLocation/system/passwords/admin", request))
       val response = Await.result(f, timeout)
-      assert(response.status === "success") //TODO: Change to "ok" to be consistent
+      assert(response.status === "success")
     }
 
     scenario("Set user password") {
@@ -117,7 +117,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[SimpleResponse] = pipeline(Put(s"$apiLocation/system/passwords/user", request))
       val response = Await.result(f, timeout)
-      assert(response.status === "success") //TODO: Change to "ok" to be consistent
+      assert(response.status === "success")
     }
   }
 
@@ -129,7 +129,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Key import requires admin authentication") {
@@ -141,7 +141,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     val purpose = "encryption"
@@ -164,7 +164,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
           //Then("Redirect is returned")
           val location = response.headers.toList.filter(_.is("location"))
           assert( location.nonEmpty )
-          assert(response.status.intValue === 303) //Redirection to imported key
+          assert(response.status.intValue === 303) // Redirection to imported key
 
           val keyLocation: String = location.map(_.value).head
           //val f = fixture
@@ -227,7 +227,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Key generation requires admin authentication") {
@@ -238,7 +238,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     keyLengths.map{ keyLength =>
@@ -308,7 +308,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys"))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("List existing keys and check for given keys") {
@@ -334,7 +334,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
         val f: Future[HttpResponse] = pipeline(Get(host + keyEnvelopes.head.location + "/public.pem"))
         val response = Await.result(f, timeout)
-        assert(response.status.intValue === 401)  // unauthorized
+        assert(response.status.intValue === 401) // unauthorized
       }
 
     scenario("Retrieve public keys in PEM format") {
@@ -360,48 +360,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
     }
   }
 
-  /*
-  ignore("Overwrite existing keys") {
-    scenario("Overwrite every second key") {
-      Iterator.from(1, 2).takeWhile(_ < keyEnvelopes.size).map(keyEnvelopes(_))foreach{ keyEnvelope =>
-        //TODO overwrite...
-      }
-      /*
-      //Given(s"A RSA-$keyLength key for $purpose")
-      val keyPair = generateRSACrtKeyPair(keyLength)
-      val request = KeyImport(purpose, "RSA", keyPair.privateKey)
-      //publicKey = keyPair.publicKey :: publicKey
-
-      //When("Key is imported")
-      val pipeline: HttpRequest => Future[HttpResponse] = (
-        //TODO: addCredentials(BasicHttpCredentials("admin", ""))
-        sendReceive
-        //~> unmarshal[SimpleResponse]
-      )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
-      whenReady(responseF) { response =>
-        //Then("Redirect is returned")
-        val location = response.headers.toList.filter(_.is("location"))
-        assert( location.nonEmpty )
-        assert(response.status.intValue === 303) //Redirection to imported key
-
-        val keyLocation: String = location.map(_.value).head
-        //val f = fixture
-        //fixture.keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", keyPair.publicKey)) :: fixture.keyEnvelopes //Use this key for subsequent tests
-
-        //To allow proper comparison the leading zero of values is dropped.
-        val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
-        keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", trimmedPubKey)) //Use this key for subsequent tests
-        val pipeline: HttpRequest => Future[NkPublicKeyResponse] = sendReceive ~> unmarshal[NkPublicKeyResponse]
-        val responseF: Future[NkPublicKeyResponse] = pipeline(Get(s"$host$keyLocation"))
-        whenReady(responseF) { response =>
-          assert(response.status === "success")
-          assert(response.data.publicKey === trimmedPubKey )
-        }
-      } */
-    }
-  }
-*/
   feature("Decrypt message") {
 
     scenario("Decryption requires (user) authentication") {
@@ -411,7 +369,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Decrypt message (RSA, no padding)") {
@@ -464,7 +422,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Sign message (RSA, PKCS#1 padding)") {
@@ -520,6 +478,44 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
     }
   }
 
+  feature("Overwrite existing keys") {
+    scenario("Overwrite every second key") {
+      Iterator.from(1, 2).takeWhile(_ < keyEnvelopes.size).map(keyEnvelopes(_))foreach{ keyEnvelope =>
+        info("Overwriting key " + keyEnvelope.location)
+      
+        //Given(s"A new RSA-$keyLength key for $purpose")
+        val keyPair = generateRSACrtKeyPair(2048) // fixed size results in changing key size
+        val request = KeyImport("encryption", "RSA", keyPair.privateKey) // fixed purpose results in overwriting purpose
+
+        //When("Key is imported")
+        val pipeline: HttpRequest => Future[HttpResponse] = (
+          addCredentials(BasicHttpCredentials("admin", adminPassword))
+          ~> sendReceive
+        )
+        
+        val responseF: Future[HttpResponse] = pipeline(Put(host + keyEnvelope.location, request))
+        whenReady(responseF) { response =>
+          assert(response.status.intValue === 200) // OK
+
+          //To allow proper comparison the leading zero of values is dropped.
+          val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
+
+          val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
+            addCredentials(BasicHttpCredentials("user", userPassword))
+            ~> sendReceive 
+            ~> unmarshal[NkPublicKeyResponse]
+          )
+
+          val responseF: Future[NkPublicKeyResponse] = pipeline(Get(host + keyEnvelope.location))
+          whenReady(responseF) { response =>
+            assert(response.status === "success")
+            assert(response.data.publicKey === trimmedPubKey )
+          }
+        }
+      }
+    }
+  }
+
   feature("Delete RSA key") {
 
     scenario("Deleting key requires authentication") {
@@ -527,7 +523,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Deleting key requires admin authentication") {
@@ -538,7 +534,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
       )
       val f: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
       val response = Await.result(f, timeout)
-      assert(response.status.intValue === 401)  // unauthorized
+      assert(response.status.intValue === 401) // unauthorized
     }
 
     scenario("Delete RSA key") {
