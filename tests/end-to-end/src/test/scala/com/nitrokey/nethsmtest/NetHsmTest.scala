@@ -544,7 +544,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures {
         val pipeline: HttpRequest => Future[HttpResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
           ~> sendReceive
-          //~> unmarshal[SimpleResponse]
         )
 
         //When("Key is deleted")
