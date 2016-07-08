@@ -456,13 +456,31 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Wm.Rd.lookup_path_info_exn "uid" rd
   end
 
-
   (** A resource for querying system status *)
   class status = object(self)
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private to_json rd =
       Wm.continue (`String "{\"status\":\"ok\"}") rd
+
+    method! allowed_methods rd =
+      Wm.continue [`GET] rd
+
+    method content_types_provided rd =
+      Wm.continue [
+        "application/json", self#to_json
+      ] rd
+
+    method content_types_accepted rd =
+      Wm.continue [] rd
+  end
+
+  (** A resource for providing product information *)
+  class information = object(self)
+    inherit [Cohttp_lwt_body.t] Wm.resource
+
+    method private to_json rd =
+      Wm.continue (`String "{\"vendor\":\"Nitrokey\",\"product\":\"NetHSM\",\"version\":\"0.1\"}") rd
 
     method! allowed_methods rd =
       Wm.continue [`GET] rd
@@ -493,7 +511,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         fun () -> new key_actions keyring) ;
       (api_prefix ^ "/keys/:id/actions/:padding/:hash_type/:action",
         fun () -> new key_actions keyring) ;
-      (api_prefix ^ "/system/status", fun () -> new status) ;
+        (api_prefix ^ "/system/status", fun () -> new status) ;
+        (api_prefix ^ "/system/information", fun () -> new information) ;
       (api_prefix ^ "/system/passwords/:uid", fun () -> new passwords) ;
     ] in
     let callback _ request body =
