@@ -210,12 +210,12 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
-/*    scenario(s"Importing a RSA-2048 key with given ID") {
+    scenario(s"Importing a RSA-2048 key with given ID") {
       //Given(s"A RSA-$keyLength key for $purpose")
       val keyLength = 2048
       val id = "myId123"
       val keyPair = generateRSACrtKeyPair(keyLength)
-      val request = KeyImport(purpose, "RSA", keyPair.privateKey, id)
+      val request = KeyImportWithId(purpose, "RSA", keyPair.privateKey, id)
       //publicKey = keyPair.publicKey :: publicKey
 
       //When("Key is imported")
@@ -231,7 +231,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         assert(response.status.intValue === 303) // Redirection to imported key
 
         val keyLocation: String = location.map(_.value).head
-        println("keyLocation: " + keyLocation)
         assert( keyLocation.endsWith(id) )
         //val f = fixture
         //fixture.keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", keyPair.publicKey)) :: fixture.keyEnvelopes //Use this key for subsequent tests
@@ -250,7 +249,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
           assert(response.data.publicKey === trimmedPubKey )
         }
       }
-    } */
+    }
 
     scenario("Importing a RSA key for encryption") (pending)
 
@@ -339,11 +338,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
-/*    scenario(s"Generate RSA-2048 key with given ID") {
+    scenario(s"Generate RSA-2048 key with given ID") {
       //Given("Key generation request")
       val keyLength = 3072
       val id = "1isAnotherId2"
-      val request = KeyGeneration("signing", "RSA", keyLength, id)
+      val request = KeyGenerationWithId("signing", "RSA", keyLength, id)
       val pipeline: HttpRequest => Future[HttpResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
@@ -356,7 +355,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         assert(response.status.intValue === 303) //Redirection to new key
 
         val keyLocation = location.map(_.value).head
-        println("keyLocation: " + keyLocation)
         assert( keyLocation.endsWith(id) )
 
         //Then("Retrieve new public key and verify its length")
@@ -373,7 +371,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
               NkPublicRsaKey(dropLeadingZero(response.data.publicKey.modulus), dropLeadingZero(response.data.publicKey.publicExponent))))
         }
       }
-    } */
+    }
 
     scenario("Generating unsupported ECC key fails") {
       val request = KeyGeneration("signing", "ECC", 2048)

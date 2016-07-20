@@ -41,6 +41,20 @@ types:
       purpose: string
       algorithm: string
       length: integer
+  KeyImportWithId:
+    type: object
+    properties:
+      purpose: string
+      algorithm: string
+      privateKey: PrivateRsaKey
+      id: string
+  KeyGenerationWithId:
+    type: object
+    properties:
+      purpose: string
+      algorithm: string
+      length: integer
+      id: string
 
 /keys:
   description: The keys being stored in the NetHSM
@@ -51,17 +65,19 @@ types:
       application/json:
         type: KeyImport | KeyGeneration
         examples:
-          KeyImport:
+          KeyImportWithId:
             purpose: "signing"
             algorithm: "RSA"
             privateKey:
               primeP: "frtz7u89gft89uz"
               primeQ: "FhJQl11CiY0ifRHXeAqFh4rdSl6"
               publicExponent: "w367rg90jhj0asdf98gz"
-          KeyGeneration:
-              purpose: "signing"
-              algorithm: "RSA"
-              length: 2048
+            id: "myKey1"
+          KeyGenerationWithId:
+            purpose: "signing"
+            algorithm: "RSA"
+            length: 2048
+            id: "myKey1"
     responses:
       303:
         headers:
@@ -88,7 +104,7 @@ types:
         200:
         404:
         500:
-    post:
+    put:
       description: Import or generate key pair in(to) NetHSM in a specified location
       securedBy: basic # Administrator
       body:
@@ -110,6 +126,8 @@ types:
         200:
         404:
         500:
+      queryParameters:
+        key:
     get:
       description: Retrieve public key
       securedBy: null

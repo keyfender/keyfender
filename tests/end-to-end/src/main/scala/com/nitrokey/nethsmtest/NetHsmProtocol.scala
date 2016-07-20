@@ -171,7 +171,13 @@ object NetHsmProtocol extends DefaultJsonProtocol {
   case class KeyImport(purpose: String, algorithm: String, privateKey: NkPrivateRsaKey)
   implicit val KeyImportFormat = jsonFormat3(KeyImport)
 
+  case class KeyImportWithId(purpose: String, algorithm: String, privateKey: NkPrivateRsaKey, id: String)
+  implicit val KeyImportWithIdFormat = jsonFormat4(KeyImportWithId)
+
   case class KeyGeneration(purpose: String, algorithm: String, length: Int)
   implicit val keyGenerationFormat = jsonFormat3(KeyGeneration)
+
+  case class KeyGenerationWithId(purpose: String, algorithm: String, length: Int, id: String)
+  implicit val keyGenerationWithIdFormat = jsonFormat4(KeyGenerationWithId)
 
 }
