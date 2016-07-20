@@ -115,6 +115,12 @@ let rsa_priv_of_json json =
   Priv.Rsa (Nocrypto.Rsa.priv_of_primes ~e ~p ~q)
 
 let priv_of_json json =
+  let id =
+    try
+      Some (YB.Util.member "id" json |> YB.Util.to_string)
+    with
+      YB.Util.Type_error _ -> None
+  in
   let purpose = string_of_json_key json "purpose" in
   let algorithm = string_of_json_key json "algorithm" in
   let data_json = YB.Util.member "privateKey" json in
@@ -131,7 +137,7 @@ let priv_of_json json =
       -> failwith_missing ["privateKey"; "length"]
     | _ -> failwith_desc ("Unknown key type: " ^ algorithm)
   in
-  { Priv.purpose; data }
+  id, { Priv.purpose; data }
 
 (* let priv_of_pem s =
   Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
@@ -178,11 +184,14 @@ module Db = struct
   let get_all db =
     with_db db ~f:(fun l -> (l, l))
 
-  let add db e =
+  let add db id e =
     with_db db ~f:(fun l ->
-      let id = new_id l in
-      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id, e] l in
-      (id, l'))
+      let id' = match id with
+        | Some x -> x
+        | None -> new_id l
+      in
+      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id', e] l in
+      (id', l'))
 
   let put db id e =
     let found = ref false in
@@ -235,13 +244,13 @@ let create () = Db.create ()
 
 let add ks ~key =
   try
-    priv_of_json key |> Db.add ks >|= fun x -> Ok x
+    priv_of_json key |> fun (id, k) -> Db.add ks id k >|= fun x -> Ok x
   with
   | Failure_exn json -> Lwt.return (Failure json)
 
 let put ks ~id ~key =
   try
-    priv_of_json key |> Db.put ks id >|= fun x -> Ok x
+    priv_of_json key |> fun (_, k) -> Db.put ks id k >|= fun x -> Ok x
   with
   | Failure_exn json -> Lwt.return (Failure json)
 
