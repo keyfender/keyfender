@@ -10,7 +10,7 @@ $ make run
 ```
 
 This will run the HSM on localhost on port 8080, so you should be
-able to access [http://localhost:8080/api/v1](http://localhost:8080/api/v1).
+able to access [http://localhost:8080/api/v0](http://localhost:8080/api/v0).
 
 For DEBUG output start NetHSM by executing `DEBUG=1 ./src/mir-nethsm`.
 
