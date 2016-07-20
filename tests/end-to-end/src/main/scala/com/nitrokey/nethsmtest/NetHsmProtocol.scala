@@ -104,6 +104,9 @@ object NetHsmProtocol extends DefaultJsonProtocol {
   case class SimpleResponse(status: String)
   implicit val SystemStatusFormat = jsonFormat1(SimpleResponse)
 
+  case class SystemInformationResponse(vendor: String, product: String, version: String)
+  implicit val SystemInformationResponseFormat = jsonFormat3(SystemInformationResponse)
+
   case class DecryptRequest(encrypted: Seq[Byte])
   implicit object DecryptRequest extends RootJsonFormat[DecryptRequest] {
     def write(x: DecryptRequest) = JsObject(
