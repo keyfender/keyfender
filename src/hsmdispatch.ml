@@ -2,7 +2,7 @@ open Lwt.Infix
 
 module YB = Yojson.Basic
 
-let api_prefix = "/api/v1"
+let api_prefix = "/api/v0"
 
 module Hash = struct
   let paths = [
