@@ -8,8 +8,7 @@ baseUriParameters:
     description: Host name or host IP address
   hostPort:
     description: Port of the host
-#baseUri: http://mocksvc.mulesoft.com/mocks/bc9055f5-5fb7-4311-98c0-9f4858c5773d/{version}
-protocols: HTTPS
+protocols: HTTPS # TODO. Currently HTTP only.
 mediaType: application/json
 securitySchemes:
   basic:
@@ -24,23 +23,33 @@ types:
       primeP: string
       primeQ: string
       publicExponent: string
+    additionalProperties: false
   PublicRsaKey:
     type: object
     properties:
       modulus: string
       publicExponent: string
+    additionalProperties: false
+  PublicKeyEnvelope:
+    type: object
+    properties:
+      purpose: string
+      algorithm: string
+      publicKey: PublicRsaKey
   KeyImport:
     type: object
     properties:
       purpose: string
       algorithm: string
       privateKey: PrivateRsaKey
+    additionalProperties: false
   KeyGeneration:
     type: object
     properties:
       purpose: string
       algorithm: string
       length: integer
+    additionalProperties: false
   KeyImportWithId:
     type: object
     properties:
@@ -48,6 +57,7 @@ types:
       algorithm: string
       privateKey: PrivateRsaKey
       id: string
+    additionalProperties: false
   KeyGenerationWithId:
     type: object
     properties:
@@ -55,15 +65,35 @@ types:
       algorithm: string
       length: integer
       id: string
+    additionalProperties: false
+  KeyList:
+    type: array
+    items:
+      type: object
+      properties:
+        location: string
+      additionalProperties: false
+  SystemInformation:
+    type: object
+    properties:
+      vendor: string
+      product: string
+      version: string
+    additionalProperties: false
+  PasswordChange:
+    type: object
+    properties:
+      newPassword: string
+    additionalProperties: false
 
 /keys:
-  description: The keys being stored in the NetHSM
+  description: The keys being stored in the NetHSM.
   post:
-    description: Import or generate key pair in(to) NetHSM
+    description: Import or generate a key pair in(to) NetHSM at a specified location.
     securedBy: basic # Administrator
     body:
       application/json:
-        type: KeyImport | KeyGeneration
+        type: KeyImportWithId | KeyGenerationWithId
         examples:
           KeyImportWithId:
             purpose: "signing"
@@ -82,30 +112,30 @@ types:
       303:
         headers:
           Location:
-            example: /api/{version}/e345678uzt5678
+            example: /api/{version}/myKey1
       404:
       500:
   get:
-    description: Retrieve a list of all key locations.
-    securedBy: null
+    description: Retrieve a list of all existing key locations.
+    securedBy: basic # User
     responses:
       200:
         body:
           application/json:
-            type: object
-            properties:
-              location: string
+            type: KeyList
+            example: [location: "/api/v1/gz78ijhbhuij", location: "/api/v1/mykeyId"]
+      401: # unauthorized
 
   /{keyLocation}:
     delete:
-      description: Deletes key pair
+      description: Deletes the specified key pair.
       securedBy: basic # Administrator
       responses:
         200:
         404:
         500:
     put:
-      description: Import or generate key pair in(to) NetHSM in a specified location
+      description: Replaces an existing key pair by importing or generating a new key pair.
       securedBy: basic # Administrator
       body:
         application/json:
@@ -129,17 +159,13 @@ types:
       queryParameters:
         key:
     get:
-      description: Retrieve public key
-      securedBy: null
+      description: Retrieve the public key.
+      securedBy: basic # User
       responses:
         200:
           body:
             application/json:
-              type: object
-              properties:
-                purpose: string
-                algorithm: string
-                publicKey: PublicRsaKey
+              type: PublicKeyEnvelope
               example:
                 purpose: "signing"
                 algorithm: "RSA"
@@ -151,26 +177,27 @@ types:
       description: Retrieve the public key in PEM format
       get:
         description: Retrieve Public Key
-        securedBy: null
+        securedBy: basic # User
         responses:
           200:
             body:
               application/json: # TODO
 
     /actions/{decryptMode}/decrypt:
-      description: Decryption to be performed with the secret key
+      description: Decryption to be performed with the secret key. The provided examples are exhaustive.
       uriParameters:
         decryptMode:
           type: string
+          examples: ["RSA/NONE/NoPadding", "RSA/NONE/PKCS1Padding", "RSA/None/OAEPWithMd5AndMGF1Padding", "RSA/None/OAEPWithSha1AndMGF1Padding", "RSA/None/OAEPWithSha224AndMGF1Padding", "RSA/None/OAEPWithSha256AndMGF1Padding", "RSA/None/OAEPWithSha384AndMGF1Padding", "RSA/None/OAEPWithSha512AndMGF1Padding"]
       post:
         securedBy: basic # User
         body:
           application/json:
             type: object
             properties:
-              decrypted: string
+              encrypted: string
             example:
-              decrypted: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
+              encrypted: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
         responses:
           200:
             body:
@@ -190,10 +217,11 @@ types:
           500:
 
     /actions/{signMode}/sign:
-      description: Signature to be performed with the secret key
+      description: Signature to be performed with the secret key. The provided examples are exhaustive.
       uriParameters:
         signMode:
           type: string
+          examples: ["pkcs1", "pss/md5", "pss/sha1", "pss/sha224", "pss/sha256", "pss/sha384", "pss/sha512"]
       post:
         securedBy: basic # User
         body:
@@ -202,7 +230,7 @@ types:
             properties:
               message: string
             example:
-              message: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
+              message: "this is a message"
         responses:
           200:
             body:
@@ -221,67 +249,90 @@ types:
           404:
           500:
 
-/passwords:
-    /admin:
-      description: Admin Password is required to authenticate system modifications. It has to be defined before a new device can be used.
-      post:
-        description: Activate or change the password. Basic Authentication is required for changing but not activating.
-        securedBy: [null, basic] # Administrator
-        body:
-          application/json:
-            type: object
-            properties:
-              newPassword: string
-            example:
-              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
-        responses:
-          200:
-          404:
-          500:
-    /boot:
-      description: The Boot Password is required to unlock a freshly booted system. It's optional. Alternatively the User Password is used.
-      post:
-        description: Activate or change the password. Basic Authentication is required for changing but not activating.
-        securedBy: [null, basic] # Boot
-        body:
-          application/json:
-            type: object
-            properties:
-              newPassword: string
-            example:
-              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
-        responses:
-          200:
-          404:
-          500:
-      delete:
-        queryParameters:
-        securedBy: basic # Administrator, Boot
-        description: Deactivate the password
-        responses:
-          200:
-          404:
-          500:
-    /user:
-      description: User Password is required to execute operations.
-      post:
-        description: Activate or change the password.
-        securedBy: basic # Administrator, User
-        body:
-          application/json:
-            type: object
-            properties:
-              newPassword: string
-            example:
-              newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
-        responses:
-          200:
-          404:
-          500:
 /system:
+  /passwords:
+      /admin:
+        description: Admin Password is required to authenticate system modifications. It has to be defined before a new device can be used.
+        put:
+          description: Activate or change the password. The default password is empty.
+          securedBy: basic # Administrator
+          body:
+            application/json:
+              type: PasswordChange
+              example:
+                newPassword: "mysupersecretpassword"
+          responses:
+            200:
+            404:
+            500:
+      /boot:
+        description: The Boot Password is required to unlock a freshly booted system. It's optional. Alternatively the User Password is used. TODO
+        post:
+          description: Activate or change the password. Basic Authentication is required for changing but not activating.
+          securedBy: [null, basic] # Boot
+          body:
+            application/json:
+              type: PasswordChange
+              example:
+                newPassword: "nhrfotu32409ru0rgert45z54z099u23r03498uhtr"
+          responses:
+            200:
+            404:
+            500:
+        delete:
+          queryParameters:
+          securedBy: basic # Administrator, Boot
+          description: Deactivate the password
+          responses:
+            200:
+            404:
+            500:
+      /user:
+        description: User Password is required to execute operations.
+        put:
+          description: Activate or change the password.
+          securedBy: basic # Administrator, User?
+          body:
+            application/json:
+              type: PasswordChange
+              example:
+                newPassword: "anotherGoodPassword"
+          responses:
+            200:
+            404:
+            500:
+  /information:
+    get:
+      description: Provides information about the vendor, product, version
+      securedBy: null
+      responses:
+        200:
+          body:
+            application/json:
+              type: SystemInformation
+            example:
+              vendor: Nitrokey
+              product: NetHSM
+              version: 1.0
+  /serial:
+    description: The system's serial number should be derived from some hardware serials (e.g. CPU ID). TODO
+    get:
+  /status:
+    description: The current system status.
+    get:
+      securedBy: null
+      responses:
+        200:
+          body:
+            application/json:
+              type: object
+              properties:
+                status: string
+              example:
+                status: "ok"
   /firmware:
     post:
-      description: Update the firmware
+      description: Update the firmware. TODO
       securedBy: basic # Administrator
       body:
         application/json:
@@ -297,9 +348,8 @@ types:
         responses:
           200:
           500:
-
   /keys:
-    description: Keys for the system.
+    description: Keys for the system. TODO
     /firmware/public:
       description: The public key is used to verify signed firmware updates.
       get:
@@ -395,14 +445,8 @@ types:
           securedBy: basic # Administrator
           body:
             #TODO
-  /lock:
-    description: Lock an unlocked system so that no operations are possible anymore until it is unlocked again.
-    post:
-      securedBy: basic # Administrator, Boot or User
-  /name:
-    description: The name of the system (e.g. NetHSM)
-    get:
   /network:
+    description: The network settings. TODO
     /ipv4:
       get:
       post:
@@ -433,35 +477,19 @@ types:
               address: "2001:0db8:0:f101::1/64"
               netmask: "64"
               gateway: "fe80::1"
+  /lock:
+    description: Lock an unlocked system so that no operations are possible anymore until it is unlocked again. TODO
+    post:
+      securedBy: basic # Administrator, Boot or User
   /reboot:
-    description: Reboot the system
+    description: Reboot the system TODO
     post:
       securedBy: basic # Administrator
-  /serial:
-    description: The system's serial number should be derived from some hardware serials (e.g. CPU ID).
-    get:
-  /status:
-    description: The current system status.
-    get:
-      securedBy: null
-      responses:
-        200:
-          body:
-            application/json:
-              type: object
-              properties:
-                status: string
-              example:
-                status: "ok"
-
   /shutdown:
-    description: Shutdown and poweroff the system.
+    description: Shutdown and poweroff the system. TODO
     post:
       securedBy: basic # Administrator
   /unlock:
-    description: Unlock and decrypt all critical data (e.g. keys) after a fresh boot or locking.
+    description: Unlock and decrypt all critical data (e.g. keys) after a fresh boot or locking. TODO
     post:
       securedBy: basic # Boot
-  /vendor:
-    description: The vendor of the system (e.g. Nitrokey)
-    get:

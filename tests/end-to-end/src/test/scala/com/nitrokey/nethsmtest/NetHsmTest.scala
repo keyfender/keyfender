@@ -251,10 +251,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
-    scenario("Importing a RSA key for encryption") (pending)
-
-    scenario("Importing a RSA key for authentication") (pending)
-
     scenario("Importing unsupported ECC key fails") {
       val keyPair = generateRSACrtKeyPair(2048)
       val request = KeyImport("signing", "ECC", keyPair.privateKey)
@@ -426,8 +422,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         }
       }
     }
-
-    scenario("Test pagination") (pending)
 
     scenario("Retrieving public key requires (user) authentication") {
         val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
