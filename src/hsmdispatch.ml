@@ -118,7 +118,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     method private to_json rd =
       Keyring.get_all keyring
       >|= List.map (fun id -> `Assoc [
-          ("location", `String (api_prefix ^ "/keys/" ^ id))
+          ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode id))
         ])
       >>= fun json_l ->
         let json_s = jsend_success (`List json_l)
@@ -150,7 +150,9 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Keyring.add keyring ~key
         >>= function
           | Keyring.Ok new_id ->
-            let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^ new_id) rd in
+            let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^
+              Uri.pct_encode new_id) rd
+            in
             let resp_body =
               `String (jsend_success `Null |> YB.pretty_to_string ~std:true) in
             Wm.continue true { rd' with Wm.Rd.resp_body }
@@ -248,7 +250,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         Wm.continue deleted { rd with Wm.Rd.resp_body }
 
     method private id rd =
-      Wm.Rd.lookup_path_info_exn "id" rd
+      Uri.pct_decode (Wm.Rd.lookup_path_info_exn "id" rd)
   end
 
   (** A resource for querying an individual key in the database by id via GET,
@@ -290,7 +292,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Wm.continue [] rd
 
     method private id rd =
-      Wm.Rd.lookup_path_info_exn "id" rd
+      Uri.pct_decode (Wm.Rd.lookup_path_info_exn "id" rd)
   end
 
   (** A resource for executing actions on keys via POST. Parameters for the
@@ -373,7 +375,8 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
         | _, _, `None
           -> raise @@ Failure "invalid action resource"
 
-    method private id rd = Wm.Rd.lookup_path_info_exn "id" rd
+    method private id rd =
+      Uri.pct_decode (Wm.Rd.lookup_path_info_exn "id" rd)
 
     method private action rd =
       let action_str = Wm.Rd.lookup_path_info_exn "action" rd in
