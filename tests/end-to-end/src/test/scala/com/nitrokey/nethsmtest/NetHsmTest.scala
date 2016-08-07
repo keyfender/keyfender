@@ -251,6 +251,57 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
+    scenario(s"Importing a RSA-2048 key with an ID containing slash and umlaut") {
+      //Given(s"A RSA-$keyLength key for $purpose")
+      val keyLength = 2048
+      val id = "project1/Schlüssel2"
+      val keyPair = generateRSACrtKeyPair(keyLength)
+      val request = KeyImportWithId(purpose, "RSA", keyPair.privateKey, id)
+      //publicKey = keyPair.publicKey :: publicKey
+
+      //When("Key is imported")
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("admin", adminPassword))
+        ~> sendReceive
+        //~> unmarshal[SimpleResponse]
+      )
+      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        //Then("Redirect is returned")
+        val location = response.headers.toList.filter(_.is("location"))
+        assert(response.status.intValue === 303) // Redirection to imported key
+
+        //The provided keyID contains special characters which should have been encoded by HSM
+        import java.net.URLEncoder
+        val encodedId: String = URLEncoder.encode(id, "UTF-8")
+          .replaceAll("\\+", "%20")
+          .replaceAll("\\%21", "!")
+          .replaceAll("\\%27", "'")
+          .replaceAll("\\%28", "(")
+          .replaceAll("\\%29", ")")
+          .replaceAll("\\%7E", "~")
+        val keyLocation: String = location.map(_.value).head
+        assert( keyLocation.endsWith(encodedId) )
+
+        //val f = fixture
+        //fixture.keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", keyPair.publicKey)) :: fixture.keyEnvelopes //Use this key for subsequent tests
+
+        //To allow proper comparison the leading zero of values is dropped.
+        val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
+        keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", trimmedPubKey)) //Use this key for subsequent tests
+
+        val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
+          addCredentials(BasicHttpCredentials("user", userPassword))
+          ~> sendReceive ~> unmarshal[NkPublicKeyResponse]
+        )
+        val responseF: Future[NkPublicKeyResponse] = pipeline(Get(s"$host$keyLocation"))
+        whenReady(responseF) { response =>
+          assert(response.status === "success")
+          assert(response.data.publicKey === trimmedPubKey )
+        }
+      }
+    }
+
     scenario("Importing unsupported ECC key fails") {
       val keyPair = generateRSACrtKeyPair(2048)
       val request = KeyImport("signing", "ECC", keyPair.privateKey)
