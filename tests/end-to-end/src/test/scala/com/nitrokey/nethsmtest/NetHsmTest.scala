@@ -56,7 +56,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
   val hashAlgorithms = List("md5", "sha1", "sha224", "sha256", "sha384", "sha512")
 
   //This list keeps all keys being generated and imported which are used for most subsequent tests
-  val keyEnvelopes = new ListBuffer[PublicKeyEnvelope]
+  val pubKeys = new ListBuffer[NkPublicKey]
   val tempAdminPassword = "bla"
   val adminPassword = "super secret"
   val userPassword = "secret too"
@@ -195,7 +195,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
           //To allow proper comparison the leading zero of values is dropped.
           val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
-          keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", trimmedPubKey)) //Use this key for subsequent tests
+          pubKeys += NkPublicKey(idFromLocation(keyLocation), purpose, "RSA", trimmedPubKey) //Use this key for subsequent tests
 
           val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
             addCredentials(BasicHttpCredentials("user", userPassword))
@@ -237,7 +237,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
         //To allow proper comparison the leading zero of values is dropped.
         val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
-        keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", trimmedPubKey)) //Use this key for subsequent tests
+        pubKeys += NkPublicKey(idFromLocation(keyLocation), purpose, "RSA", trimmedPubKey) //Use this key for subsequent tests
 
         val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
@@ -288,7 +288,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
         //To allow proper comparison the leading zero of values is dropped.
         val trimmedPubKey = NkPublicRsaKey(dropLeadingZero(keyPair.publicKey.modulus), dropLeadingZero(keyPair.publicKey.publicExponent))
-        keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", trimmedPubKey)) //Use this key for subsequent tests
+        pubKeys += NkPublicKey(idFromLocation(keyLocation), purpose, "RSA", trimmedPubKey) //Use this key for subsequent tests
 
         val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
@@ -378,8 +378,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
           whenReady(responseF) { response =>
             assert(response.status === "success")
             assert(response.data.publicKey.modulus.length*8 === keyLength)
-            keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey("signing", "RSA", //response.publicKey))
-                NkPublicRsaKey(dropLeadingZero(response.data.publicKey.modulus), dropLeadingZero(response.data.publicKey.publicExponent))))
+            pubKeys += NkPublicKey(idFromLocation(keyLocation), "signing", "RSA", //response.publicKey))
+                NkPublicRsaKey(dropLeadingZero(response.data.publicKey.modulus), dropLeadingZero(response.data.publicKey.publicExponent)))
           }
         }
       }
@@ -414,8 +414,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         whenReady(responseF) { response =>
           assert(response.status === "success")
           assert(response.data.publicKey.modulus.length*8 === keyLength)
-          keyEnvelopes += PublicKeyEnvelope(keyLocation, NkPublicKey("signing", "RSA", //response.publicKey))
-              NkPublicRsaKey(dropLeadingZero(response.data.publicKey.modulus), dropLeadingZero(response.data.publicKey.publicExponent))))
+          pubKeys += NkPublicKey(idFromLocation(keyLocation), "signing", "RSA", //response.publicKey))
+              NkPublicRsaKey(dropLeadingZero(response.data.publicKey.modulus), dropLeadingZero(response.data.publicKey.publicExponent)))
         }
       }
     }
@@ -458,8 +458,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
 
     scenario("List existing keys and check for given keys") {
-      keyEnvelopes.map{ keyEnvelope =>
-        info("Check for key " + keyEnvelope.location)
+      pubKeys.map{ pubKey =>
+        info("Check for key " + pubKey.id)
         val pipeline: HttpRequest => Future[PublicKeyListResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive
@@ -469,26 +469,26 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         whenReady(responseF) { response =>
           assert(response.status === "success")
           assert(response.data.length > 0)
-          assert(response.data.exists(x => x.location === keyEnvelope.location))
+          assert(response.data.exists(x => x.location === "/api/v0/keys/"+pubKey.id))
         }
       }
     }
 
     scenario("Retrieving public key requires (user) authentication") {
         val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
-        val f: Future[HttpResponse] = pipeline(Get(host + keyEnvelopes.head.location + "/public.pem"))
+        val f: Future[HttpResponse] = pipeline(Get(host + "/api/v0/keys/" + pubKeys.head.id + "/public.pem"))
         val response = Await.result(f, timeout)
         assert(response.status.intValue === 401) // unauthorized
       }
 
     scenario("Retrieve public keys in PEM format") {
-      keyEnvelopes.map{ keyEnvelope =>
-        info("Check for key " + keyEnvelope.location)
+      pubKeys.map{ pubKey =>
+        info("Check for key " + pubKey.id)
         val pipeline: HttpRequest => Future[HttpResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive
         )
-        val responseF: Future[HttpResponse] = pipeline(Get(host + keyEnvelope.location + "/public.pem"))
+        val responseF: Future[HttpResponse] = pipeline(Get(host + "/api/v0/keys/" + pubKey.id + "/public.pem"))
         whenReady(responseF) { response =>
           val pubKey = response.entity.asString //Extracting the HTTP response body
 
@@ -508,8 +508,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
     scenario("Decryption requires (user) authentication") {
       val message = "secure your digital life".getBytes
-      val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelopes.head.key.publicKey) )
-      val location = keyEnvelopes.head.location
+      val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", pubKeys.head.publicKey) )
+      val location = "/api/v0/keys/" + pubKeys.head.id
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
       val response = Await.result(f, timeout)
@@ -517,37 +517,37 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
 
     scenario("Decrypt message (RSA, no padding)") {
-      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
-        decryptionTest(keyEnvelope, "", "RSA/NONE/NoPadding")
+      pubKeys.filter(x => x.purpose == "encryption").map{ pubKey =>
+        decryptionTest(pubKey, "", "RSA/NONE/NoPadding")
       }
     }
 
     scenario("Decrypt message (RSA, PKCS#1 padding)") {
-      keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
-        decryptionTest(keyEnvelope, "/pkcs1", "RSA/NONE/PKCS1Padding")
+      pubKeys.filter(x => x.purpose == "encryption").map{ pubKey =>
+        decryptionTest(pubKey, "/pkcs1", "RSA/NONE/PKCS1Padding")
       }
     }
     hashAlgorithms.map{ hash =>
       scenario("Decrypt message (RSA, OAEP, "+hash+")") {
-        keyEnvelopes.filter(x => x.key.purpose == "encryption").map{ keyEnvelope =>
-          if( !(keyEnvelope.key.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
-            decryptionTest(keyEnvelope, "/oaep/"+hash, "RSA/None/OAEPWith"+hash+"AndMGF1Padding")
+        pubKeys.filter(x => x.purpose == "encryption").map{ pubKey =>
+          if( !(pubKey.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
+            decryptionTest(pubKey, "/oaep/"+hash, "RSA/None/OAEPWith"+hash+"AndMGF1Padding")
         }
       }
     }
 
     ignore("Decryption fails with signing key") {
       val message = "Secure your digital life".getBytes
-      keyEnvelopes.filter(x => x.key.purpose != "encryption").map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
-        info("RSA-" + keyLength + " key for " + keyEnvelope.key.purpose)
+      pubKeys.filter(x => x.purpose != "encryption").map{ pubKey =>
+        val keyLength = pubKey.publicKey.modulus.length*8
+        info("RSA-" + keyLength + " key for " + pubKey.purpose)
 
-        val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", keyEnvelope.key.publicKey) )
+        val request = DecryptRequest( encrypt(message, "RSA/NONE/NoPadding", pubKey.publicKey) )
         val pipeline = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive //~> unmarshal[JsendResponse]
         )
-        val location = keyEnvelope.location
+        val location = "/api/v0/keys/" + pubKey.id
         val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/decrypt", request))
         whenReady(responseF) { response =>
           assert(response.status.intValue === 405 )
@@ -562,7 +562,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     scenario("Signing requires (user) authentication") {
       val cleartextMessage = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
       val request = SignRequest(hash(cleartextMessage, "sha256"))
-      val location = keyEnvelopes.head.location
+      val location = "/api/v0/keys/" + pubKeys.head.id
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
       val response = Await.result(f, timeout)
@@ -570,32 +570,32 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
 
     scenario("Sign message (RSA, PKCS#1 padding)") {
-      keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
-        signatureTest(keyEnvelope, "/pkcs1", "NONEwithRSA")
+      pubKeys.filter(x => x.purpose == "signing").map{ pubKey =>
+        signatureTest(pubKey, "/pkcs1", "NONEwithRSA")
       }
     }
 
     hashAlgorithms.filter(x => x != "md5").map{ hash => //MD5 doesn't work with SUN and BouncyCastle Security Provider
       scenario("Sign message (RSA, PSS, "+hash+")") {
-        keyEnvelopes.filter(x => x.key.purpose == "signing").map{ keyEnvelope =>
-          if( !(keyEnvelope.key.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
-            signatureTest(keyEnvelope, "/pss/"+hash, hash+"withRSAandMGF1") //similar to "RSASSA-PSS"
+        pubKeys.filter(x => x.purpose == "signing").map{ pubKey =>
+          if( !(pubKey.publicKey.modulus.length == 128 && hash == "sha512")) //Exception because SHA512 is too large for 1024 bit RSA keys
+            signatureTest(pubKey, "/pss/"+hash, hash+"withRSAandMGF1") //similar to "RSASSA-PSS"
         }
       }
     }
 
     ignore("Signing fails with encryption key") {
       val message = "Secure your digital life".getBytes
-      keyEnvelopes.filter(x => x.key.purpose != "signing").map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
-        info("RSA-" + keyLength + " key for " + keyEnvelope.key.purpose)
+      pubKeys.filter(x => x.purpose != "signing").map{ pubKey =>
+        val keyLength = pubKey.publicKey.modulus.length*8
+        info("RSA-" + keyLength + " key for " + pubKey.purpose)
 
         val request = SignRequest(message)
         val pipeline = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive //~> unmarshal[JsendResponse]
         )
-        val location = keyEnvelope.location
+        val location = "/api/v0/keys/" + pubKey.id
         val responseF: Future[HttpResponse] = pipeline(Post(s"$host$location/actions/pkcs1/sign", request))
         whenReady(responseF) { response =>
           assert(response.status.intValue === 405 )
@@ -612,20 +612,20 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         addCredentials(BasicHttpCredentials("user", userPassword))
         ~> sendReceive ~> unmarshal[SignResponse]
       )
-      val keyEnvelope = keyEnvelopes.head
-      val location = keyEnvelope.location
+      val pubKey = pubKeys.head
+      val location = "/api/v0/keys/" + pubKey.id
       val responseF: Future[SignResponse] = pipeline(Post(s"$host$location/actions/pss/sign", request))
       whenReady(responseF) { response =>
         assert(response.status === "success")
-        assert(verifySignature(messageHash, response.data.signedMessage, keyEnvelope.key.publicKey, "NONEwithRSAandMGF1"))
+        assert(verifySignature(messageHash, response.data.signedMessage, pubKey.publicKey, "NONEwithRSAandMGF1"))
       }
     }
   }
 
   feature("Overwrite existing keys") {
     scenario("Overwrite every second key") {
-      Iterator.from(1, 2).takeWhile(_ < keyEnvelopes.size).map(keyEnvelopes(_))foreach{ keyEnvelope =>
-        info("Overwriting key " + keyEnvelope.location)
+      Iterator.from(1, 2).takeWhile(_ < pubKeys.size).map(pubKeys(_))foreach{ pubKey =>
+        info("Overwriting key " + pubKey.id)
 
         //Given(s"A new RSA-$keyLength key for $purpose")
         val keyPair = generateRSACrtKeyPair(2048) // fixed size results in changing key size
@@ -637,7 +637,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
           ~> sendReceive
         )
 
-        val responseF: Future[HttpResponse] = pipeline(Put(host + keyEnvelope.location, request))
+        val responseF: Future[HttpResponse] = pipeline(Put(host + "/api/v0/keys/" + pubKey.id, request))
         whenReady(responseF) { response =>
           assert(response.status.intValue === 200) // OK
 
@@ -650,7 +650,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
             ~> unmarshal[NkPublicKeyResponse]
           )
 
-          val responseF: Future[NkPublicKeyResponse] = pipeline(Get(host + keyEnvelope.location))
+          val responseF: Future[NkPublicKeyResponse] = pipeline(Get(host + "/api/v0/keys/" + pubKey.id))
           whenReady(responseF) { response =>
             assert(response.status === "success")
             assert(response.data.publicKey === trimmedPubKey )
@@ -663,7 +663,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
   feature("Delete RSA key") {
 
     scenario("Deleting key requires authentication") {
-      val location = keyEnvelopes.head.location
+      val location = "/api/v0/keys/" + pubKeys.head.id
       val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
       val f: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
       val response = Await.result(f, timeout)
@@ -671,7 +671,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
 
     scenario("Deleting key requires admin authentication") {
-      val location = keyEnvelopes.head.location
+      val location = "/api/v0/keys/" + pubKeys.head.id
       val pipeline: HttpRequest => Future[HttpResponse] = (
         addCredentials(BasicHttpCredentials("user", userPassword))
         ~> sendReceive
@@ -682,8 +682,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
 
     scenario("Delete RSA key") {
-      keyEnvelopes.map{ keyEnvelope =>
-        val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+      pubKeys.map{ pubKey =>
+        val keyLength = pubKey.publicKey.modulus.length*8
         info(s"A RSA key with $keyLength bit in NetHSM")
         val pipeline: HttpRequest => Future[HttpResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
@@ -691,7 +691,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         )
 
         //When("Key is deleted")
-        val location = keyEnvelope.location
+        val location = "/api/v0/keys/" + pubKey.id
         val responseF: Future[HttpResponse] = pipeline(Delete(s"$host$location"))
         whenReady(responseF) { response =>
           //Then("Key doesn't exist anymore")
@@ -808,13 +808,13 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     val response = Await.result(f, timeout)
   }
 
-  def decryptionTest(keyEnvelope: PublicKeyEnvelope, parameter: String, cipherSuite: String) = {
-    val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+  def decryptionTest(pubKey: NkPublicKey, parameter: String, cipherSuite: String) = {
+    val keyLength = pubKey.publicKey.modulus.length*8
     info(s"A RSA key with $keyLength bit")
 
     //Given("An encrypted message")
     val message = "secure your digital life".getBytes
-    val request = DecryptRequest( encrypt(message, cipherSuite, keyEnvelope.key.publicKey) )
+    val request = DecryptRequest( encrypt(message, cipherSuite, pubKey.publicKey) )
 
     //When("Message is decrypted")
     val pipeline = (
@@ -822,8 +822,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       ~> sendReceive
       ~> unmarshal[DecryptResponse]
     )
-    val location = keyEnvelope.location
-    val responseF: Future[DecryptResponse] = pipeline(Post(s"$host$location/actions$parameter/decrypt", request))
+    val id = pubKey.id
+    val responseF: Future[DecryptResponse] = pipeline(Post(s"$host/api/v0/keys/$id/actions$parameter/decrypt", request))
 
     //Then("Decrypted message is identical")
     whenReady(responseF) { response =>
@@ -832,8 +832,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     }
   }
 
-  def signatureTest(keyEnvelope: PublicKeyEnvelope, parameter: String, cipherSuite: String) = {
-    val keyLength = keyEnvelope.key.publicKey.modulus.length*8
+  def signatureTest(pubKey: NkPublicKey, parameter: String, cipherSuite: String) = {
+    val keyLength = pubKey.publicKey.modulus.length*8
     info(s"A RSA key with $keyLength bit")
 
     //Given("A message")
@@ -852,13 +852,13 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       ~> sendReceive
       ~> unmarshal[SignResponse]
     )
-    val location = keyEnvelope.location
-    val responseF: Future[SignResponse] = pipeline(Post(s"$host$location/actions$parameter/sign", request))
+    val id = pubKey.id
+    val responseF: Future[SignResponse] = pipeline(Post(s"$host/api/v0/keys/$id/actions$parameter/sign", request))
 
     //Then("Signature is correct")
     whenReady(responseF) { response =>
       assert(response.status === "success")
-      assert(verifySignature(message, response.data.signedMessage, keyEnvelope.key.publicKey, cipherSuite))
+      assert(verifySignature(message, response.data.signedMessage, pubKey.publicKey, cipherSuite))
     }
   }
 
@@ -880,5 +880,11 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     info("Time per operation: " + (t1 - t0)/100 + "ns = " + (t1 - t0)/100000000 + "ms")
     info(1.0/((t1 - t0)/1000000000.0)*100.0 + " operations per second")
     result
+  }
+  
+  def idFromLocation(location: String): String = {
+    import java.lang.String
+    val start: Int = location.lastIndexOf("/")
+    location.substring(start+1)
   }
 }

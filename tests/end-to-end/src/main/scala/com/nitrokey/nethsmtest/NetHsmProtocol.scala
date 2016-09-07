@@ -83,14 +83,11 @@ object NetHsmProtocol extends DefaultJsonProtocol {
     }
   }
 
-  case class NkPublicKey(purpose: String, algorithm: String, publicKey: NkPublicRsaKey)
-  implicit val PublicKeyFormat = jsonFormat3(NkPublicKey)
+  case class NkPublicKey(id: String, purpose: String, algorithm: String, publicKey: NkPublicRsaKey)
+  implicit val PublicKeyFormat = jsonFormat4(NkPublicKey)
 
   case class NkPublicKeyResponse(status: String, data: NkPublicKey)
   implicit val PublicKeyResponseFormat = jsonFormat2(NkPublicKeyResponse)
-
-  case class PublicKeyEnvelope(location: String, key: NkPublicKey)
-  implicit val PublicKeyEnvelopeFormat = jsonFormat2(PublicKeyEnvelope)
 
   case class PublicKeyLocation(location: String)
   implicit val PublicKeyLocationFormat = jsonFormat1(PublicKeyLocation)
