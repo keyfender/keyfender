@@ -13,7 +13,7 @@ module Padding : sig
     | PSS of Nocrypto.Hash.hash
 end
 
-val json_of_pub : pub -> Yojson.Basic.json
+val json_of_pub : string -> pub -> Yojson.Basic.json
 
 val pem_of_pub : pub -> string
 

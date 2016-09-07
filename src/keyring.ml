@@ -224,8 +224,9 @@ let pem_of_pub { Pub.data ; _ } =
   let Pub.Rsa k = data in
   `RSA k |> X509.Encoding.Pem.Public_key.to_pem_cstruct1 |> Cstruct.to_string
 
-let json_of_pub { Pub.purpose; data } =
+let json_of_pub id { Pub.purpose; data } =
   let json_hd = [
+    ("id", `String id);
     ("purpose", `String purpose);
     ]
   in

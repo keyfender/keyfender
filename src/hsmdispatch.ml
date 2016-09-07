@@ -198,7 +198,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
       Keyring.get keyring ~id
       >>= function
         | None     -> assert false
-        | Some key -> let json = Keyring.json_of_pub key in
+        | Some key -> let json = Keyring.json_of_pub id key in
           let json_s = jsend_success json |> YB.pretty_to_string ~std:true in
           Wm.continue (`String json_s) rd
 
