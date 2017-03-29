@@ -464,7 +464,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private to_json rd =
-      Wm.continue (`String "{\"status\":\"ok\"}") rd
+      Wm.continue (`String "{\n  \"status\": \"ok\"\n}\n") rd
 
     method! allowed_methods rd =
       Wm.continue [`GET] rd
