@@ -79,7 +79,14 @@ let jsend = function
   | Keyring.Ok json -> jsend_success json
   | Keyring.Failure json -> jsend_failure json
 
-module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
+
+let https_src = Logs.Src.create "https" ~doc:"HTTPS server"
+module Https_log = (val Logs.src_log https_src : Logs.LOG)
+
+let http_src = Logs.Src.create "http" ~doc:"HTTP server"
+module Http_log = (val Logs.src_log http_src : Logs.LOG)
+
+module Main (C:Mirage_types_lwt.CONSOLE) (FS:Mirage_types_lwt.KV_RO) (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -564,7 +571,7 @@ module Main (C:V1_LWT.CONSOLE) (FS:V1_LWT.KV_RO) (H:Cohttp_lwt.Server) = struct
     (* create the server and handle requests with the function defined above *)
     let conn_closed (_,conn_id) =
       let cid = Cohttp.Connection.to_string conn_id in
-      C.log c (Printf.sprintf "conn %s closed" cid)
+      Https_log.info (fun f -> f "[%s] closing" cid);
     in
     http (`TCP port) (H.make ~conn_closed ~callback ())
 end

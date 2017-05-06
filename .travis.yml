@@ -1,5 +1,6 @@
 language: c
 sudo: false
+dist: trusty
 addons:
   apt:
     sources:
@@ -19,12 +20,7 @@ cache:
     - $HOME/.opam
     - $HOME/.sbt
     - $HOME/.ivy2
-    - $HOME/gcc
-    - $HOME/binutils
 before_cache:
   - rm -rfv $HOME/.opam/log
 install: bash -ex .travis-install.sh
 script: bash -ex .travis-script.sh
-env:
-  matrix:
-  - FLAGS="-vv --no-depext"

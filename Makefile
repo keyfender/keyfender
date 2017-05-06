@@ -35,7 +35,7 @@ all:
 	@echo "For unikernel configuration option, do \"mirage configure --help\" in src/"
 
 configure:
-	cd src && NET=$(NET) mirage configure $(FLAGS) -t $(MODE)
+	cd src && mirage configure -t $(MODE) --net $(NET) $(FLAGS)
 
 depend:
 	cd src && make depend
@@ -44,7 +44,7 @@ build:
 	cd src && make build
 
 run:
-	cd src && ./mir-nethsm
+	cd src && ./nethsm
 
 test:
 	src/mir-nethsm & cd tests/end-to-end && sbt test ; sleep 1 ; kill $$!
