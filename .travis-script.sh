@@ -6,7 +6,7 @@ export DEPEXT=
 
 # build nethsm
 eval $(opam config env)
-#MODE=xen NET=direct make configure depend build
+MODE=xen NET=direct make configure depend build
 MODE=unix NET=direct make configure depend build
 MODE=unix NET=socket make configure depend build
 

@@ -15,6 +15,10 @@ opam update -u
 opam install mirage
 opam upgrade mirage
 
+# webmachine 0.4.0 requires calendar which is not compatible with
+# mirage
+opam pin add webmachine 0.3.2
+
 # install sbt
 mkdir $HOME/bin
 curl -s https://raw.githubusercontent.com/paulp/sbt-extras/master/sbt > ~/bin/sbt && chmod 0755 ~/bin/sbt
