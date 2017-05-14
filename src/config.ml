@@ -1,7 +1,6 @@
 open Mirage
 
 let stack = generic_stackv4 default_network
-let data = generic_kv_ro "htdocs"
 (* set ~tls to false to get a plain-http server *)
 let https_srv = http_server @@ conduit_direct ~tls:true stack
 
@@ -24,7 +23,7 @@ let main =
   let keys = List.map Key.abstract [ http_port; https_port ] in
   foreign
     ~packages ~keys
-    "Hsmdispatch.Main" (console @-> kv_ro @-> http @-> job)
+    "Hsmdispatch.Main" (http @-> job)
 
 let () =
-  register "nethsm" [main $ default_console $ data $ https_srv]
+  register "nethsm" [main $ https_srv]

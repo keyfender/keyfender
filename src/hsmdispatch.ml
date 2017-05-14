@@ -86,7 +86,7 @@ module Https_log = (val Logs.src_log https_src : Logs.LOG)
 let http_src = Logs.Src.create "http" ~doc:"HTTP server"
 module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
-module Main (C:Mirage_types_lwt.CONSOLE) (FS:Mirage_types_lwt.KV_RO) (H:Cohttp_lwt.Server) = struct
+module Main (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -504,7 +504,7 @@ module Main (C:Mirage_types_lwt.CONSOLE) (FS:Mirage_types_lwt.KV_RO) (H:Cohttp_l
       Wm.continue [] rd
   end
 
-  let start c _ http =
+  let start http =
     (* listen on port 8080 *)
     let port = 8080 in
     (* create the database *)
