@@ -86,7 +86,7 @@ module Https_log = (val Logs.src_log https_src : Logs.LOG)
 let http_src = Logs.Src.create "http" ~doc:"HTTP server"
 module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
-module Main (H:Cohttp_lwt.Server) = struct
+module Dispatch (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -504,12 +504,11 @@ module Main (H:Cohttp_lwt.Server) = struct
       Wm.continue [] rd
   end
 
-  let start http =
-    (* listen on port 8080 *)
-    let port = 8080 in
-    (* create the database *)
-    let keyring = Keyring.create () in
-    (* the route table *)
+  let dispatcher keyring request body =
+    let open Cohttp in
+    (* Perform route dispatch. If [None] is returned, then the URI path did
+    not match any of the route patterns. In this case the server should
+    return a 404 [`Not_found]. *)
     let routes = [
       (api_prefix ^ "/keys", fun () -> new keys keyring) ;
       (api_prefix ^ "/keys/:id", fun () -> new key keyring) ;
@@ -525,53 +524,98 @@ module Main (H:Cohttp_lwt.Server) = struct
         (api_prefix ^ "/system/information", fun () -> new information) ;
       (api_prefix ^ "/system/passwords/:uid", fun () -> new passwords) ;
     ] in
-    let callback _ request body =
-      let open Cohttp in
-      (* Perform route dispatch. If [None] is returned, then the URI path did
-      not match any of the route patterns. In this case the server should
-      return a 404 [`Not_found]. *)
-      Wm.dispatch' routes ~body ~request
-      >|= begin function
-        | None        -> (`Not_found, Header.init (), `String "Not found", [])
-        | Some result -> result
-      end
-      >>= fun (status, headers, body, path) ->
-        (* If you'd like to see the path that the request took through the
-         * decision diagram, then run this example with the [DEBUG_PATH]
-         * environment variable set. This should suffice:
-         *
-         *  [$ DEBUG_PATH= ./crud_lwt.native]
-         *
-         *)
-        let debug_path =
-          match Sys.getenv "DEBUG_PATH" with
-          | _ -> Printf.sprintf " - %s" (String.concat ", " path)
-          | exception Not_found   -> ""
-        in
-        let debug_out =
-          match Sys.getenv "DEBUG" with
-          | _ ->
-            let resp_body = match body with
-              | `Empty | `String _ | `Strings _ as x -> Body.to_string x
-              | `Stream _ -> "__STREAM__"
-            in
-            Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n\
-                            ----------------------------------------\n"
-            (Header.to_string headers) resp_body
-          | exception Not_found   -> ""
-        in
-        Printf.eprintf "%d - %s %s%s%s\n"
-          (Code.code_of_status status)
-          (Code.string_of_method (Request.meth request))
-          (Uri.path (Request.uri request))
-          debug_path debug_out;
-        (* Finally, send the response to the client *)
-        H.respond ~headers ~body ~status ()
+    Wm.dispatch' routes ~body ~request
+    >|= begin function
+      | None        -> (`Not_found, Header.init (), `String "Not found", [])
+      | Some result -> result
+    end
+    >>= fun (status, headers, body, path) ->
+      (* If you'd like to see the path that the request took through the
+       * decision diagram, then run this example with the [DEBUG_PATH]
+       * environment variable set. This should suffice:
+       *
+       *  [$ DEBUG_PATH= ./crud_lwt.native]
+       *
+       *)
+      let debug_path =
+        match Sys.getenv "DEBUG_PATH" with
+        | _ -> Printf.sprintf " - %s" (String.concat ", " path)
+        | exception Not_found   -> ""
+      in
+      let debug_out =
+        match Sys.getenv "DEBUG" with
+        | _ ->
+          let resp_body = match body with
+            | `Empty | `String _ | `Strings _ as x -> Body.to_string x
+            | `Stream _ -> "__STREAM__"
+          in
+          Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n\
+                          ----------------------------------------\n"
+          (Header.to_string headers) resp_body
+        | exception Not_found   -> ""
+      in
+      Printf.eprintf "%d - %s %s%s%s\n"
+        (Code.code_of_status status)
+        (Code.string_of_method (Request.meth request))
+        (Uri.path (Request.uri request))
+        debug_path debug_out;
+      (* Finally, send the response to the client *)
+      H.respond ~headers ~body ~status ()
+
+  (* Redirect to the same address, but in https. *)
+  let redirect port request _body =
+    let uri = Cohttp.Request.uri request in
+    let new_uri = Uri.with_scheme uri (Some "https") in
+    let new_uri = Uri.with_port new_uri (Some port) in
+    Http_log.info (fun f -> f "[%s] -> [%s]"
+                      (Uri.to_string uri) (Uri.to_string new_uri)
+                  );
+    let headers = Cohttp.Header.init_with "location" (Uri.to_string new_uri) in
+    H.respond ~headers ~status:`Moved_permanently ~body:`Empty ()
+
+  let serve dispatch =
+    let callback (_, cid) request body =
+      let uri = Cohttp.Request.uri request in
+      let cid = Cohttp.Connection.to_string cid in
+      Https_log.info (fun f -> f "[%s] serving %s." cid (Uri.to_string uri));
+      dispatch request body
     in
-    (* create the server and handle requests with the function defined above *)
-    let conn_closed (_,conn_id) =
-      let cid = Cohttp.Connection.to_string conn_id in
+    let conn_closed (_,cid) =
+      let cid = Cohttp.Connection.to_string cid in
       Https_log.info (fun f -> f "[%s] closing" cid);
     in
-    http (`TCP port) (H.make ~conn_closed ~callback ())
+    H.make ~conn_closed ~callback ()
+end
+
+module HTTPS
+    (Pclock: Mirage_types.PCLOCK) (KEYS: Mirage_types_lwt.KV_RO) (Http: Cohttp_lwt.Server) =
+struct
+
+  module X509 = Tls_mirage.X509(KEYS)(Pclock)
+  module D = Dispatch(Http)
+
+  let tls_init kv =
+    X509.certificate kv `Default >>= fun cert ->
+    let conf = Tls.Config.server ~certificates:(`Single cert) () in
+    Lwt.return conf
+
+  let start _clock keys http =
+    tls_init keys >>= fun cfg ->
+    let https_port = Key_gen.https_port () in
+    let tls = `TLS (cfg, `TCP https_port) in
+    let http_port = Key_gen.http_port () in
+    let tcp = `TCP http_port in
+    (* create the database *)
+    let keyring = Keyring.create () in
+    let https =
+      Https_log.info (fun f -> f "listening on %d/TCP" https_port);
+      http tls @@ D.serve (D.dispatcher keyring)
+    in
+    let http =
+      Http_log.info (fun f -> f "listening on %d/TCP" http_port);
+      http tcp @@ D.serve (D.redirect https_port)
+      (* http tcp @@ D.serve (D.dispatcher keyring) *)
+    in
+    Lwt.join [ https; http ]
+
 end

@@ -23,7 +23,7 @@ let main =
   let keys = List.map Key.abstract [ http_port; https_port ] in
   foreign
     ~packages ~keys
-    "Hsmdispatch.Main" (http @-> job)
+    "Hsmdispatch.HTTPS" (pclock @-> kv_ro @-> http @-> job)
 
 let () =
-  register "nethsm" [main $ https_srv]
+  register "nethsm" [main $ default_posix_clock $ certs $ https_srv]

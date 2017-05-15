@@ -47,7 +47,7 @@ run:
 	cd src && ./nethsm
 
 test:
-	src/mir-nethsm & cd tests/end-to-end && sbt test ; sleep 1 ; kill $$!
+	src/nethsm & cd tests/end-to-end && sbt test ; sleep 1 ; kill $$!
 
 clean:
 	cd src && make clean ; mirage clean

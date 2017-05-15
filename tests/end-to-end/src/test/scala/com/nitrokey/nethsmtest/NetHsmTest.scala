@@ -1,27 +1,31 @@
 package com.nitrokey.nethsmtest
 
 import akka.actor.ActorSystem
+import akka.io.IO
+import collection.mutable.ListBuffer
+import com.typesafe.config.ConfigFactory
+import com.typesafe.scalalogging.LazyLogging
 import Crypto._
+import java.io.File
+import java.io.{ByteArrayInputStream, BufferedReader, Reader, InputStreamReader}
+import java.security.interfaces.RSAPublicKey
+import java.security.Security
+import java.security.cert.X509Certificate
+import javax.net.ssl.{KeyManager, SSLContext, X509TrustManager}
+import NetHsmProtocol._
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.openssl.PEMReader
 import org.scalatest.FeatureSpec
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.concurrent.IntegrationPatience
 import org.scalatest.time.{Span, Seconds, Millis}
-import com.typesafe.scalalogging.LazyLogging
-import spray.http._
-import spray.httpx.SprayJsonSupport._
-import spray.client.pipelining._
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
-import NetHsmProtocol._
-import com.typesafe.config.ConfigFactory
-import java.io.File
-import collection.mutable.ListBuffer
+import spray.can.Http
+import spray.client.pipelining._
+import spray.http._
+import spray.httpx.SprayJsonSupport._
 import spray.httpx.unmarshalling._
-import java.io.{ByteArrayInputStream, BufferedReader, Reader, InputStreamReader}
-import java.security.interfaces.RSAPublicKey
-import java.security.Security
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.openssl.PEMReader
 
 /**
  * These tests are highly dependent and all together represent an entire lifecycle of a NetHSM.
@@ -35,6 +39,18 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
   val settings = new Settings(conf)
   val host = settings.fullHost
   val apiLocation = host + settings.prefix
+
+  implicit val mySSLContext: SSLContext = {
+      object WideOpenX509TrustManager extends X509TrustManager {
+        override def checkClientTrusted(chain: Array[X509Certificate], authType: String) = ()
+        override def checkServerTrusted(chain: Array[X509Certificate], authType: String) = ()
+        override def getAcceptedIssuers = Array[X509Certificate]()
+      }
+
+      val context = SSLContext.getInstance("TLS")
+      context.init(Array[KeyManager](), Array(WideOpenX509TrustManager), null)
+      context
+  }
 
   //Spray needs an implicit ActorSystem and ExecutionContext
   implicit val system = ActorSystem("restClient")
@@ -64,6 +80,8 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
   val logRequest: HttpRequest => HttpRequest = { r => logger.debug(r.toString); r }
   val logResponse: HttpResponse => HttpResponse = { r => logger.debug(r.toString); r }
   //private val defaultPipeline = defaultRequest ~> logRequest ~> sendReceive ~> logResponse
+
+  IO(Http) ! Http.HostConnectorSetup(settings.host, settings.port, sslEncryption = settings.tls)
 
   feature("NetHSM tells it's system information") {
 
