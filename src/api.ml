@@ -79,13 +79,6 @@ let jsend = function
   | Keyring.Ok json -> jsend_success json
   | Keyring.Failure json -> jsend_failure json
 
-
-let https_src = Logs.Src.create "https" ~doc:"HTTPS server"
-module Https_log = (val Logs.src_log https_src : Logs.LOG)
-
-let http_src = Logs.Src.create "http" ~doc:"HTTP server"
-module Http_log = (val Logs.src_log http_src : Logs.LOG)
-
 module Dispatch (H:Cohttp_lwt.Server) = struct
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
@@ -561,61 +554,4 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
         debug_path debug_out;
       (* Finally, send the response to the client *)
       H.respond ~headers ~body ~status ()
-
-  (* Redirect to the same address, but in https. *)
-  let redirect port request _body =
-    let uri = Cohttp.Request.uri request in
-    let new_uri = Uri.with_scheme uri (Some "https") in
-    let new_uri = Uri.with_port new_uri (Some port) in
-    Http_log.info (fun f -> f "[%s] -> [%s]"
-                      (Uri.to_string uri) (Uri.to_string new_uri)
-                  );
-    let headers = Cohttp.Header.init_with "location" (Uri.to_string new_uri) in
-    H.respond ~headers ~status:`Moved_permanently ~body:`Empty ()
-
-  let serve dispatch =
-    let callback (_, cid) request body =
-      let uri = Cohttp.Request.uri request in
-      let cid = Cohttp.Connection.to_string cid in
-      Https_log.info (fun f -> f "[%s] serving %s." cid (Uri.to_string uri));
-      dispatch request body
-    in
-    let conn_closed (_,cid) =
-      let cid = Cohttp.Connection.to_string cid in
-      Https_log.info (fun f -> f "[%s] closing" cid);
-    in
-    H.make ~conn_closed ~callback ()
-end
-
-module HTTPS
-    (Pclock: Mirage_types.PCLOCK) (KEYS: Mirage_types_lwt.KV_RO) (Http: Cohttp_lwt.Server) =
-struct
-
-  module X509 = Tls_mirage.X509(KEYS)(Pclock)
-  module D = Dispatch(Http)
-
-  let tls_init kv =
-    X509.certificate kv `Default >>= fun cert ->
-    let conf = Tls.Config.server ~certificates:(`Single cert) () in
-    Lwt.return conf
-
-  let start _clock keys http =
-    tls_init keys >>= fun cfg ->
-    let https_port = Key_gen.https_port () in
-    let tls = `TLS (cfg, `TCP https_port) in
-    let http_port = Key_gen.http_port () in
-    let tcp = `TCP http_port in
-    (* create the database *)
-    let keyring = Keyring.create () in
-    let https =
-      Https_log.info (fun f -> f "listening on %d/TCP" https_port);
-      http tls @@ D.serve (D.dispatcher keyring)
-    in
-    let http =
-      Http_log.info (fun f -> f "listening on %d/TCP" http_port);
-      http tcp @@ D.serve (D.redirect https_port)
-      (* http tcp @@ D.serve (D.dispatcher keyring) *)
-    in
-    Lwt.join [ https; http ]
-
 end

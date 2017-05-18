@@ -1,1 +1,0 @@
-SYNTAX += -tags "warn(-42)"
