@@ -12,7 +12,7 @@ $ make run
 This will run the HSM on localhost on port 8080, so you should be
 able to access [http://localhost:8080/api/v0](http://localhost:8080/api/v0).
 
-For DEBUG output start NetHSM by executing `DEBUG=1 ./src/mir-nethsm`.
+For debug output start NetHSM by executing `MIRAGE_LOGS=debug ./src/mir-nethsm`.
 
 For a Xen DHCP kernel, do:
 
@@ -217,4 +217,3 @@ Available key actions:
 * pss/sha256/sign
 * pss/sha384/sign
 * pss/sha512/sign
-

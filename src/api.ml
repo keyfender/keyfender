@@ -527,35 +527,20 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
       | Some result -> result
     end
     >>= fun (status, headers, body, path) ->
-      (* If you'd like to see the path that the request took through the
-       * decision diagram, then run this example with the [DEBUG_PATH]
-       * environment variable set. This should suffice:
-       *
-       *  [$ DEBUG_PATH= ./crud_lwt.native]
-       *
-       *)
-      let debug_path =
-        match Sys.getenv "DEBUG_PATH" with
-        | _ -> Printf.sprintf " - %s" (String.concat ", " path)
-        | exception Not_found   -> ""
-      in
-      let debug_out =
-        match Sys.getenv "DEBUG" with
-        | _ ->
-          let resp_body = match body with
-            | `Empty | `String _ | `Strings _ as x -> Body.to_string x
-            | `Stream _ -> "__STREAM__"
-          in
-          Printf.sprintf "\nResponse header:\n%sResponse body:\n%s\n\
-                          ----------------------------------------\n"
-          (Header.to_string headers) resp_body
-        | exception Not_found   -> ""
-      in
-      Api_log.info (fun f -> f "%d - %s %s%s%s\n"
+      Api_log.info (fun f -> f "%d - %s %s"
         (Code.code_of_status status)
         (Code.string_of_method (Request.meth request))
-        (Uri.path (Request.uri request))
-        debug_path debug_out);
+        (Uri.path (Request.uri request)));
+      Api_log.debug (fun f ->
+        f "Webmachine path: %s" (String.concat ", " path));
+      Api_log.debug (fun f ->
+        f "Response header:\n%s" (Header.to_string headers));
+      Api_log.debug (fun f ->
+        let resp_body = match body with
+          | `Empty | `String _ | `Strings _ as x -> Body.to_string x
+          | `Stream _ -> "__STREAM__"
+        in
+        f "Response body:\n%s" resp_body);
       (* Finally, send the response to the client *)
       H.respond ~headers ~body ~status ()
 end
