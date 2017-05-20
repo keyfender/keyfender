@@ -2,6 +2,10 @@ open Lwt.Infix
 
 module YB = Yojson.Basic
 
+(* Logging *)
+let api_src = Logs.Src.create "api" ~doc:"HSM REST API"
+module Api_log = (val Logs.src_log api_src : Logs.LOG)
+
 let api_prefix = "/api/v0"
 
 module Hash = struct
@@ -547,11 +551,11 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
           (Header.to_string headers) resp_body
         | exception Not_found   -> ""
       in
-      Printf.eprintf "%d - %s %s%s%s\n"
+      Api_log.info (fun f -> f "%d - %s %s%s%s\n"
         (Code.code_of_status status)
         (Code.string_of_method (Request.meth request))
         (Uri.path (Request.uri request))
-        debug_path debug_out;
+        debug_path debug_out);
       (* Finally, send the response to the client *)
       H.respond ~headers ~body ~status ()
 end

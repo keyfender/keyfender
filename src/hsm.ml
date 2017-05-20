@@ -85,7 +85,10 @@ module Dispatch (FS: Mirage_types_lwt.KV_RO) (S: HTTP) = struct
 end
 
 module HTTPS
-    (Pclock: Mirage_types.PCLOCK) (DATA: Mirage_types_lwt.KV_RO) (KEYS: Mirage_types_lwt.KV_RO) (Http: HTTP) =
+    (Pclock: Mirage_types.PCLOCK)
+    (DATA: Mirage_types_lwt.KV_RO)
+    (KEYS: Mirage_types_lwt.KV_RO)
+    (Http: HTTP) =
 struct
 
   module X509 = Tls_mirage.X509(KEYS)(Pclock)
