@@ -170,9 +170,10 @@ module Db = struct
 
   let with_db db ~f =
     Lwt_mvar.take db   >>= fun l ->
-      let result, l' = f l in
-      Lwt_mvar.put db l' >|= fun () ->
-        result
+      try
+        let result, l' = f l in
+        Lwt_mvar.put db l' >|= fun () -> result
+      with e -> Lwt_mvar.put db l >|= fun () -> raise e
 
   let get db id =
     with_db db ~f:(fun l ->
@@ -187,7 +188,11 @@ module Db = struct
   let add db id e =
     with_db db ~f:(fun l ->
       let id' = match id with
-        | Some x -> x
+        | Some x ->
+          if (List.mem_assoc x l) then
+            failwith_desc "key id already exists"
+          else
+            x
         | None -> new_id l
       in
       let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id', e] l in
@@ -244,16 +249,20 @@ let json_of_pub id { Pub.purpose; data } =
 let create () = Db.create ()
 
 let add ks ~key =
-  try
+  Lwt.catch (fun () ->
     priv_of_json key |> fun (id, k) -> Db.add ks id k >|= fun x -> Ok x
-  with
-  | Failure_exn json -> Lwt.return (Failure json)
+  )(function
+    | Failure_exn json -> Lwt.return (Failure json)
+    | e -> raise e
+  )
 
 let put ks ~id ~key =
-  try
+  Lwt.catch (fun () ->
     priv_of_json key |> fun (_, k) -> Db.put ks id k >|= fun x -> Ok x
-  with
-  | Failure_exn json -> Lwt.return (Failure json)
+  )(function
+    | Failure_exn json -> Lwt.return (Failure json)
+    | e -> raise e
+  )
 
 let del ks ~id = Db.delete ks id
 

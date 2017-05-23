@@ -269,6 +269,41 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
+    scenario(s"Importing two keys with same ID fails") {
+      //Given(s"A RSA-$keyLength key for $purpose")
+      val keyLength = 2048
+      val id = "myDuplicateId"
+      val keyPair = generateRSACrtKeyPair(keyLength)
+      val request = KeyImportWithId(purpose, "RSA", keyPair.privateKey, id)
+      //publicKey = keyPair.publicKey :: publicKey
+
+      //When("Key is imported")
+      val pipeline: HttpRequest => Future[HttpResponse] = (
+        addCredentials(BasicHttpCredentials("admin", adminPassword))
+        ~> sendReceive
+        //~> unmarshal[SimpleResponse]
+      )
+      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      whenReady(responseF) { response =>
+        //Then("Redirect is returned")
+        val location = response.headers.toList.filter(_.is("location"))
+        assert(response.status.intValue === 303) // Redirection to imported key
+
+        val keyLocation: String = location.map(_.value).head
+        assert( keyLocation.endsWith(id) )
+
+        //When("Key is imported")
+        val pipeline: HttpRequest => Future[JsendResponse] = (
+          addCredentials(BasicHttpCredentials("admin", adminPassword))
+          ~> sendReceive ~> unmarshal[JsendResponse]
+        )
+        val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
+        whenReady(responseF) { response =>
+          assert(response.status === "failure")
+        }
+      }
+    }
+
     scenario(s"Importing a RSA-2048 key with an ID containing slash and umlaut") {
       //Given(s"A RSA-$keyLength key for $purpose")
       val keyLength = 2048
@@ -899,7 +934,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     info(1.0/((t1 - t0)/1000000000.0)*100.0 + " operations per second")
     result
   }
-  
+
   def idFromLocation(location: String): String = {
     import java.lang.String
     val start: Int = location.lastIndexOf("/")
