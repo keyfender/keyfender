@@ -161,9 +161,9 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
               `String (jsend_success `Null |> YB.pretty_to_string ~std:true) in
             Wm.continue true { rd' with Wm.Rd.resp_body }
           | Keyring.Failure json ->
-            let resp_body =
+            let body =
               `String (jsend_failure json |> YB.pretty_to_string ~std:true) in
-            Wm.continue true { rd with Wm.Rd.resp_body }
+            Wm.respond ~body 400 rd
       with
         | e ->
           let json = Printexc.to_string e |> jsend_error in

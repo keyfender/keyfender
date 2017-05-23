@@ -272,30 +272,25 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     scenario(s"Importing two keys with same ID fails") {
       //Given(s"A RSA-$keyLength key for $purpose")
       val keyLength = 2048
-      val id = "myDuplicateId"
+      val id = "myId123"
       val keyPair = generateRSACrtKeyPair(keyLength)
       val request = KeyImportWithId(purpose, "RSA", keyPair.privateKey, id)
-      //publicKey = keyPair.publicKey :: publicKey
 
-      //When("Key is imported")
+      //When("Key exists")
       val pipeline: HttpRequest => Future[HttpResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
         //~> unmarshal[SimpleResponse]
       )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[HttpResponse] = pipeline(Get(s"$apiLocation/keys/$id"))
       whenReady(responseF) { response =>
-        //Then("Redirect is returned")
-        val location = response.headers.toList.filter(_.is("location"))
-        assert(response.status.intValue === 303) // Redirection to imported key
-
-        val keyLocation: String = location.map(_.value).head
-        assert( keyLocation.endsWith(id) )
+        //Then("OK is returned")
+        assert(response.status.intValue === 200)
 
         //When("Key is imported")
         val pipeline: HttpRequest => Future[JsendResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
-          ~> sendReceive ~> unmarshal[JsendResponse]
+          ~> sendReceive ~> unmarshalFailure[JsendResponse](400)
         )
         val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
         whenReady(responseF) { response =>
@@ -360,7 +355,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       val request = KeyImport("signing", "ECC", keyPair.privateKey)
       val pipeline: HttpRequest => Future[JsendResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
-        ~> sendReceive ~> unmarshal[JsendResponse]
+        ~> sendReceive ~> unmarshalFailure[JsendResponse](400)
       )
       val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
@@ -478,7 +473,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       val pipeline: HttpRequest => Future[JsendResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
-        ~> unmarshal[JsendResponse]
+        ~> unmarshalFailure[JsendResponse](400)
       )
       val responseF: Future[JsendResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
@@ -939,5 +934,18 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     import java.lang.String
     val start: Int = location.lastIndexOf("/")
     location.substring(start+1)
+  }
+
+  def unmarshalFailure[T: FromResponseUnmarshaller](code: Int): HttpResponse ⇒ T = {
+    import spray.httpx.unmarshalling._
+    import spray.httpx.{PipelineException, UnsuccessfulResponseException}
+    response ⇒
+      assert(response.status.intValue === code)
+      response.as[T] match {
+        case Right(value) ⇒ value
+        case Left(error: MalformedContent) ⇒
+          throw new PipelineException(error.errorMessage, error.cause.orNull)
+        case Left(error) ⇒ throw new PipelineException(error.toString)
+      }
   }
 }
