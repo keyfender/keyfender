@@ -169,11 +169,19 @@ module Db = struct
       id'
 
   let with_db db ~f =
-    Lwt_mvar.take db   >>= fun l ->
-      try
-        let result, l' = f l in
-        Lwt_mvar.put db l' >|= fun () -> result
-      with e -> Lwt_mvar.put db l >|= fun () -> raise e
+    Lwt_mvar.take db
+    >>= (fun l ->
+      Lwt.catch (fun () ->
+        Lwt.wrap1 f l
+      )(function
+        | e -> Lwt_mvar.put db l
+          >>= fun () -> Lwt.fail e
+      )
+    )
+    >>= (fun (result, l') ->
+      Lwt_mvar.put db l'
+      >|= fun () -> result
+    )
 
   let get db id =
     with_db db ~f:(fun l ->
@@ -250,7 +258,13 @@ let create () = Db.create ()
 
 let add ks ~key =
   Lwt.catch (fun () ->
-    priv_of_json key |> fun (id, k) -> Db.add ks id k >|= fun x -> Ok x
+    Lwt.wrap1 priv_of_json key
+    >>= (fun (id, k) ->
+      Db.add ks id k
+    )
+    >|= (fun x ->
+      Ok x
+    )
   )(function
     | Failure_exn json -> Lwt.return (Failure json)
     | e -> raise e
@@ -258,7 +272,13 @@ let add ks ~key =
 
 let put ks ~id ~key =
   Lwt.catch (fun () ->
-    priv_of_json key |> fun (_, k) -> Db.put ks id k >|= fun x -> Ok x
+    Lwt.wrap1 priv_of_json key
+    >>= (fun (_, k) ->
+      Db.put ks id k
+    )
+    >|= (fun x ->
+      Ok x
+    )
   )(function
     | Failure_exn json -> Lwt.return (Failure json)
     | e -> raise e
