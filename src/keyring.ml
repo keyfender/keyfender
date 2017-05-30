@@ -267,7 +267,7 @@ let add ks ~key =
     )
   )(function
     | Failure_exn json -> Lwt.return (Failure json)
-    | e -> raise e
+    | e -> Lwt.fail e
   )
 
 let put ks ~id ~key =
@@ -281,7 +281,7 @@ let put ks ~id ~key =
     )
   )(function
     | Failure_exn json -> Lwt.return (Failure json)
-    | e -> raise e
+    | e -> Lwt.fail e
   )
 
 let del ks ~id = Db.delete ks id
@@ -295,8 +295,8 @@ let get_all ks = Db.get_all ks >|= List.map (fun (id, _) ->
 
 let decrypt ks ~id ~padding ~data =
   Db.get ks id
-  >|= rem_opt
-  >|= fun key ->
+  >>= Lwt.wrap1 rem_opt
+  >>= Lwt.wrap1 @@ fun key ->
   try
     let encrypted =
       try
@@ -334,10 +334,11 @@ let decrypt ks ~id ~padding ~data =
   with
     | Failure_exn json -> Failure json
 
+
 let sign ks ~id ~padding ~data =
   Db.get ks id
-  >|= rem_opt
-  >|= fun key ->
+  >>= Lwt.wrap1 rem_opt
+  >>= Lwt.wrap1 @@ fun key ->
   try
     let message =
       try
