@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/Nitrokey/nitrokey-nethsm.svg?branch=master)](https://travis-ci.org/Nitrokey/nitrokey-nethsm)
+[![Build Status](https://travis-ci.org/nethsm/nethsm.svg?branch=master)](https://travis-ci.org/nethsm/nethsm)
 
 On Unix, do:
 
