@@ -13,10 +13,6 @@ eval $(opam config env)
 # remove all pinnings from cache
 opam pin -n remove $(opam pin list -s)
 
-# 2.0.0 is incompatible
-# https://github.com/mirage/shared-memory-ring/issues/32
-opam pin -n add shared-memory-ring 1.3.0
-
 # webmachine 0.4.0 requires calendar which is not compatible with
 # mirage
 # https://github.com/inhabitedtype/ocaml-webmachine/issues/73
