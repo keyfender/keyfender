@@ -1,5 +1,5 @@
 language: c
-sudo: false
+sudo: required
 dist: trusty
 addons:
   apt:
@@ -14,6 +14,7 @@ addons:
     - opam
     - aspcud
     - libgmp-dev
+    - qemu-kvm
 cache:
   apt: true
   directories:

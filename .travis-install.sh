@@ -31,4 +31,8 @@ opam upgrade --fixup
 mkdir $HOME/bin
 curl -s https://raw.githubusercontent.com/paulp/sbt-extras/master/sbt > ~/bin/sbt && chmod 0755 ~/bin/sbt
 
+sudo ip tuntap add tap100 mode tap
+sudo ip addr add 10.0.0.1/24 dev tap100
+sudo ip link set dev tap100 up
+
 popd
