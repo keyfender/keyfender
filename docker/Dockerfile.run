@@ -1,0 +1,6 @@
+FROM alpine
+
+EXPOSE 4433 8080
+RUN apk add --no-cache --purge -U gmp && rm -rf /var/cache/apk/*
+ADD nethsm /nethsm
+CMD /nethsm --log=debug

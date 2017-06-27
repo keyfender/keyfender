@@ -1,3 +1,6 @@
+.git
+nethsm
+
 *~
 *.annot
 *.cmo
@@ -31,7 +34,6 @@ myocamlbuild.ml
 **/Makefile
 !lwt/Makefile
 !./Makefile
-.mirage.config
 
 # Generated outputs
 *.cfg
@@ -40,11 +42,9 @@ myocamlbuild.ml
 *.img
 *.xl
 *.xl.in
-*.opam
 static*.ml
 static*.mli
 mir-*
-nethsm
 **/log
 make-fat*-image.sh
-key_gen.ml
+*.opam

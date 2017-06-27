@@ -9,10 +9,10 @@ export MIRAGE_LOGS=debug
 eval $(opam config env)
 MODE=xen NET=direct make configure depend build
 MODE=unix NET=direct make configure depend build
-MODE=unix NET=socket make configure depend build
+docker/build.sh
 
-# run nethsm on port 8080
-make run 2>&1 &
+# run nethsm on port 4433
+docker run -i --rm -p4433:4433 nethsm/nethsm &
 
 # functional tests
 cd tests/end-to-end/

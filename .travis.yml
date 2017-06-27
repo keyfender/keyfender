@@ -1,6 +1,8 @@
 language: c
-sudo: false
+sudo: required
 dist: trusty
+services:
+  - docker
 addons:
   apt:
     sources:
@@ -24,6 +26,14 @@ before_cache:
   - rm -rfv $HOME/.opam/log
 install: bash -ex .travis-install.sh
 script: bash -ex .travis-script.sh
+after_success:
+  - if [ "$TRAVIS_BRANCH" == "master" -a "$TRAVIS_EVENT_TYPE" != "cron" ]; then
+    docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+    export REPO=nethsm/nethsm;
+    docker tag $REPO:latest $REPO:${TRAVIS_COMMIT::7};
+    docker tag $REPO:latest $REPO:travis-$TRAVIS_BUILD_NUMBER;
+    docker push $REPO;
+    fi
 notifications:
   webhooks:
     urls:
