@@ -4,6 +4,6 @@ RUN opam depext -i mirage
 ADD . /src
 RUN sudo chown -R opam /src
 WORKDIR /src
-RUN opam config exec -- mirage config --net=socket
+RUN opam config exec -- mirage config --net=direct
 RUN opam config exec -- make depend
 CMD opam config exec -- make
