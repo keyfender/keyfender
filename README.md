@@ -1,4 +1,29 @@
+# NetHSM Unikernel
+
 [![Build Status](https://travis-ci.org/nethsm/nethsm.svg?branch=master)](https://travis-ci.org/nethsm/nethsm)
+
+## Container
+
+To easily try out NetHSM, use the docker container `nethsm/nethsm`:
+
+Run it as a real kvm VM instance:
+```
+$ docker run --rm -ti --device=/dev/kvm:/dev/kvm --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 nethsm/nethsm
+```
+
+If kvm is not available, you can run it as a normal unix process on a tap
+device:
+```
+$ docker run --rm -ti --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 nethsm/nethsm
+```
+
+If even tap devices are not available, you can run it on a normal network
+socket:
+```
+$ docker run --rm -ti -p4433:4433 nethsm/nethsm
+```
+
+## Building
 
 On Unix, do:
 
@@ -29,11 +54,11 @@ vif = ['bridge=xenbr0']
 
 And then run the VM via `xl create -c nethsm.xl`
 
-# API
+## API
 
 The API is described in "docs" folder. You can view it in the browser [here](https://www.nitrokey.com/sites/default/files/nethsm/api.html).
 
-# Tutorial
+## Tutorial
 
 First, let's see what we have here:
 
