@@ -1,0 +1,8 @@
+BUILD_VOLUMES=""
+if [ -n "$APK_CACHE" ] ; then
+  BUILD_VOLUMES+=" -v $APK_CACHE:/etc/apk/cache"
+fi
+
+if [ -n "$OPAM_DIR" ] ; then
+  BUILD_VOLUMES+=" -v $OPAM_DIR:/home/opam/.opam"
+fi

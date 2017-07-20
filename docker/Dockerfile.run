@@ -2,5 +2,6 @@ FROM alpine
 
 EXPOSE 4433 8080
 RUN apk add --no-cache --purge -U gmp && rm -rf /var/cache/apk/*
-ADD adds/. /
+ADD container-scripts/start.sh /
+ADD build/. /
 CMD ["/start.sh"]

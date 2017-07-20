@@ -12,6 +12,8 @@
 # ocamlbuild working directory
 _build/
 
+docker/build
+
 # ocamlbuild targets
 *.byte
 *.native
