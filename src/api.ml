@@ -113,6 +113,14 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
   let is_authorized_as_user rd = has_valid_credentials ~admin:false rd
   let is_authorized_as_admin rd = has_valid_credentials ~admin:true rd
 
+  let add_common_headers (headers: Cohttp.Header.t): Cohttp.Header.t =
+    Cohttp.Header.add_list headers [
+      ("access-control-allow-origin", "*");
+      ("access-control-allow-headers", "Accept, Content-Type, Authorization");
+      ("access-control-allow-methods", "GET, HEAD, POST, DELETE, OPTIONS, PUT, PATCH")
+    ]
+
+
   (** A resource for querying all the keys in the database via GET and creating
       a new key via POST. Check the [Location] header of a successful POST
       response for the URI of the key. *)
@@ -521,12 +529,17 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
         (api_prefix ^ "/system/information", fun () -> new information) ;
       (api_prefix ^ "/system/passwords/:uid", fun () -> new passwords) ;
     ] in
-    Wm.dispatch' routes ~body ~request
+    let meth = Request.meth request in
+    begin match meth with
+      | `OPTIONS -> Lwt.return (Some (`OK, Header.init (), `Empty, [])) (* OPTIONS always ok *)
+      | _ -> Wm.dispatch' routes ~body ~request
+    end
     >|= begin function
       | None        -> (`Not_found, Header.init (), `String "Not found", [])
       | Some result -> result
     end
     >>= fun (status, headers, body, path) ->
+      let headers = add_common_headers headers in
       Api_log.info (fun f -> f "%d - %s %s"
         (Code.code_of_status status)
         (Code.string_of_method (Request.meth request))
