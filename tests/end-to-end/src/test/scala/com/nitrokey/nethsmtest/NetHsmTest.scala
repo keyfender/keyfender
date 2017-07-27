@@ -195,19 +195,18 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
         //publicKey = keyPair.publicKey :: publicKey
 
         //When("Key is imported")
-        val pipeline: HttpRequest => Future[HttpResponse] = (
+        val pipeline: HttpRequest => Future[KeyLocationResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
           ~> sendReceive
-          //~> unmarshal[SimpleResponse]
+          ~> unmarshal[KeyLocationResponse]
         )
-        val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+        val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
         whenReady(responseF) { response =>
-          //Then("Redirect is returned")
-          val location = response.headers.toList.filter(_.is("location"))
-          assert( location.nonEmpty )
-          assert(response.status.intValue === 303) // Redirection to imported key
+          //Then("OK is returned")
+          val keyLocation = response.data.location
+          assert(keyLocation.nonEmpty)
+          assert(response.status === "success")
 
-          val keyLocation: String = location.map(_.value).head
           //val f = fixture
           //fixture.keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", keyPair.publicKey)) :: fixture.keyEnvelopes //Use this key for subsequent tests
 
@@ -237,18 +236,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       //publicKey = keyPair.publicKey :: publicKey
 
       //When("Key is imported")
-      val pipeline: HttpRequest => Future[HttpResponse] = (
+      val pipeline: HttpRequest => Future[KeyLocationResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
-        //~> unmarshal[SimpleResponse]
+        ~> unmarshal[KeyLocationResponse]
       )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        //Then("Redirect is returned")
-        val location = response.headers.toList.filter(_.is("location"))
-        assert(response.status.intValue === 303) // Redirection to imported key
+        //Then("OK is returned")
+        val keyLocation = response.data.location
+        assert(response.status === "success")
 
-        val keyLocation: String = location.map(_.value).head
         assert( keyLocation.endsWith(id) )
         //val f = fixture
         //fixture.keyEnvelopes = PublicKeyEnvelope(keyLocation, NkPublicKey(purpose, "RSA", keyPair.publicKey)) :: fixture.keyEnvelopes //Use this key for subsequent tests
@@ -308,16 +306,16 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       //publicKey = keyPair.publicKey :: publicKey
 
       //When("Key is imported")
-      val pipeline: HttpRequest => Future[HttpResponse] = (
+      val pipeline: HttpRequest => Future[KeyLocationResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
-        //~> unmarshal[SimpleResponse]
+        ~> unmarshal[KeyLocationResponse]
       )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        //Then("Redirect is returned")
-        val location = response.headers.toList.filter(_.is("location"))
-        assert(response.status.intValue === 303) // Redirection to imported key
+        //Then("OK is returned")
+        val keyLocation = response.data.location
+        assert(response.status === "success")
 
         //The provided keyID contains special characters which should have been encoded by HSM
         import java.net.URLEncoder
@@ -328,7 +326,6 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
           .replaceAll("\\%28", "(")
           .replaceAll("\\%29", ")")
           .replaceAll("\\%7E", "~")
-        val keyLocation: String = location.map(_.value).head
         assert( keyLocation.endsWith(encodedId) )
 
         //val f = fixture
@@ -404,17 +401,17 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       scenario(s"Generate RSA-$keyLength key") {
         //Given("Key generation request")
         val request = KeyGeneration("signing", "RSA", keyLength)
-        val pipeline: HttpRequest => Future[HttpResponse] = (
+        val pipeline: HttpRequest => Future[KeyLocationResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
           ~> sendReceive
+          ~> unmarshal[KeyLocationResponse]
         )
         //When("Key is generated")
-        val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+        val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
         whenReady(responseF) { response =>
-          val location = response.headers.toList.filter(_.is("location"))
-          assert( location.nonEmpty )
-          val keyLocation = location.map(_.value).head
-          assert(response.status.intValue === 303) //Redirection to new key
+          val keyLocation = response.data.location
+          assert( keyLocation.nonEmpty )
+          assert(response.status === "success")
 
           //Then("Retrieve new public key and verify its length")
           val pipeline: HttpRequest => Future[NkPublicKeyResponse] = (
@@ -438,18 +435,18 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       val keyLength = 3072
       val id = "1isAnotherId2"
       val request = KeyGenerationWithId("signing", "RSA", keyLength, id)
-      val pipeline: HttpRequest => Future[HttpResponse] = (
+      val pipeline: HttpRequest => Future[KeyLocationResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
+        ~> unmarshal[KeyLocationResponse]
       )
       //When("Key is generated")
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        val location = response.headers.toList.filter(_.is("location"))
-        assert( location.nonEmpty )
-        assert(response.status.intValue === 303) //Redirection to new key
+        val keyLocation = response.data.location
+        assert( keyLocation.nonEmpty )
+        assert(response.status === "success")
 
-        val keyLocation = location.map(_.value).head
         assert( keyLocation.endsWith(id) )
 
         //Then("Retrieve new public key and verify its length")
@@ -508,12 +505,12 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     scenario("List existing keys and check for given keys") {
       pubKeys.map{ pubKey =>
         info("Check for key " + pubKey.id)
-        val pipeline: HttpRequest => Future[PublicKeyListResponse] = (
+        val pipeline: HttpRequest => Future[KeyListResponse] = (
           addCredentials(BasicHttpCredentials("user", userPassword))
           ~> sendReceive
-          ~> unmarshal[PublicKeyListResponse]
+          ~> unmarshal[KeyListResponse]
         )
-        val responseF: Future[PublicKeyListResponse] = pipeline(Get(s"$apiLocation/keys"))
+        val responseF: Future[KeyListResponse] = pipeline(Get(s"$apiLocation/keys"))
         whenReady(responseF) { response =>
           assert(response.status === "success")
           assert(response.data.length > 0)
@@ -760,16 +757,16 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
       //Generate key for this performance test
       val request = KeyGeneration("signing", "RSA", 2048)
-      val pipeline: HttpRequest => Future[HttpResponse] = (
+      val pipeline: HttpRequest => Future[KeyLocationResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
+        ~> unmarshal[KeyLocationResponse]
       )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        assert(response.status.intValue === 303) // Redirection to imported key
-        val location = response.headers.toList.filter(_.is("location"))
-        assert( location.nonEmpty )
-        val keyLocation = location.map(_.value).head
+        assert(response.status === "success")
+        val keyLocation = response.data.location
+        assert( keyLocation.nonEmpty )
 
         //Create 100 requests before executing those
         val requests = (0 to rounds).map(counter => {
@@ -802,16 +799,16 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       val keyPair = generateRSACrtKeyPair(2048)
       val publicKey = keyPair.publicKey
       val request = KeyImport("signing", "RSA", keyPair.privateKey)
-      val pipeline: HttpRequest => Future[HttpResponse] = (
+      val pipeline: HttpRequest => Future[KeyLocationResponse] = (
         addCredentials(BasicHttpCredentials("admin", adminPassword))
         ~> sendReceive
+        ~> unmarshal[KeyLocationResponse]
       )
-      val responseF: Future[HttpResponse] = pipeline(Post(s"$apiLocation/keys", request))
+      val responseF: Future[KeyLocationResponse] = pipeline(Post(s"$apiLocation/keys", request))
       whenReady(responseF) { response =>
-        assert(response.status.intValue === 303) // Redirection to imported key
-        val location = response.headers.toList.filter(_.is("location"))
-        assert( location.nonEmpty )
-        val keyLocation = location.map(_.value).head
+        assert(response.status === "success")
+        val keyLocation = response.data.location
+        assert( keyLocation.nonEmpty )
 
         //Create 100 messages
         val messages = (0 to rounds).map(counter => {

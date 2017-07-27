@@ -73,6 +73,10 @@ types:
       properties:
         location: string
       additionalProperties: false
+  KeyLocation:
+    type: object
+    properties:
+      location: string
   SystemInformation:
     type: object
     properties:
@@ -109,10 +113,11 @@ types:
             length: 2048
             id: "myKey1"
     responses:
-      303:
-        headers:
-          Location:
-            example: /api/{version}/myKey1
+      200:
+        body:
+          application/json:
+            type: KeyLocation
+            example: { location: /api/{version}/myKey1 }
       404:
       500:
   get:

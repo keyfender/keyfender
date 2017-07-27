@@ -130,6 +130,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
     method private to_json rd =
       Keyring.get_all keyring
       >|= List.map (fun id -> `Assoc [
+          ("id", `String id);
           ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode id))
         ])
       >>= fun json_l ->
@@ -162,12 +163,12 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
         Keyring.add keyring ~key
         >>= function
           | Keyring.Ok new_id ->
-            let rd' = Wm.Rd.redirect (api_prefix ^ "/keys/" ^
-              Uri.pct_encode new_id) rd
+            let resp_body = `String (jsend_success (`Assoc [
+                ("id", `String new_id);
+                ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode new_id))
+              ]) |> YB.pretty_to_string ~std:true)
             in
-            let resp_body =
-              `String (jsend_success `Null |> YB.pretty_to_string ~std:true) in
-            Wm.continue true { rd' with Wm.Rd.resp_body }
+            Wm.continue true { rd with Wm.Rd.resp_body }
           | Keyring.Failure json ->
             let body =
               `String (jsend_failure json |> YB.pretty_to_string ~std:true) in

@@ -120,12 +120,16 @@ You can generate RSA keys:
 ```
 $ curl -i -w "\n" -X POST http://admin:supersecret@localhost:8080/api/v0/keys -H "content-type: application/json" -d '{"purpose":"signing", "algorithm":"RSA", "length":4096}'
 
-HTTP/1.1 303 See Other
-location: /api/v0/keys/cphQSDP1n2q4BxnPVI4y
-{ "status": "success" }
+HTTP/1.1 200 OK
+{
+  "status": "success",
+  "data": {
+    "location": "/api/v0/keys/Im4bPvqXM8w4SZxEvxvi"
+  }
+}
 ```
 
-Here you got a 303 redirect to the newly generated key. The last part of the URL is the key ID: cphQSDP1n2q4BxnPVI4y
+Here you got the location of the newly generated key. The last part of the URL is the key ID: Im4bPvqXM8w4SZxEvxvi
 
 
 Instead of dealing with generated key IDs, you can specify the key ID yourself:
@@ -133,9 +137,13 @@ Instead of dealing with generated key IDs, you can specify the key ID yourself:
 ```
 $ curl -i -w "\n" -X POST http://admin:supersecret@localhost:8080/api/v0/keys -H "content-type: application/json" -d '{"purpose":"authentication", "algorithm":"RSA", "length":2048, "id":"myKey"}'
 
-HTTP/1.1 303 See Other
-location: /api/v0/keys/myAutKey
-{ "status": "success" }
+HTTP/1.1 200 OK
+{
+  "status": "success",
+  "data": {
+    "location": "/api/v0/keys/myKey"
+  }
+}
 ```
 
 You can also import existing keys:
@@ -143,9 +151,13 @@ You can also import existing keys:
 ```
 $ curl -i -w "\n" -X POST http://admin:supersecret@localhost:8080/api/v0/keys -d '{"purpose":"encryption", "algorithm":"RSA", "privateKey":{"publicExponent":"AQAB","primeP":"4P7TWJety3bZ47tp_WnB8BEbBX9kd_ONa6bOnPd2nxfXmLl1W61yQbZAw8bTReBfYsre8wYe8jVSs-nNGgR19-FPnXMg8xAgFrdcVvfj8OverK-q3MJhZTT2X-ZAhN5H-wWf_xXPJPMtPsPXXs914fU7WchZoBIVcarQq0eGHMM=","primeQ":"x8QUQ4aPrh33oBip_PBpzRHMRtg4isr8CwXQq8ijSd8dvYjaC8mTYPB0Nytsi047XjXBLq0HyvpjxpcVWYBzqrPKFFcafTdk80SQNtD5EUyGy_rFRbowDaG5UoMVSL1VrJLx6xI8OToUP2J1ZiuZG0I-Ms2YQcanZzYRANppLYM="}}'
 
-HTTP/1.1 303 See Other
-location: /api/v0/keys/kfG8H2z2cddUMXeiK5Ky
-{ "status": "success" }
+HTTP/1.1 200 OK
+{
+  "status": "success",
+  "data": {
+    "location": "/api/v0/keys/kfG8H2z2cddUMXeiK5Ky"
+  }
+}
 ```
 
 You can overwrite an existing key with PUT or delete with DELETE.
