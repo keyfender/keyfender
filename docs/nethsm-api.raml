@@ -82,7 +82,7 @@ types:
     properties:
       vendor: string
       product: string
-      version: string
+      version: string # TODO should it really be a string?
     additionalProperties: false
   PasswordChange:
     type: object
@@ -117,7 +117,8 @@ types:
         body:
           application/json:
             type: KeyLocation
-            example: { location: /api/{version}/myKey1 }
+            example:
+              location: "/api/{version}/myKey1"
       404:
       500:
   get:
@@ -192,8 +193,7 @@ types:
       description: Decryption to be performed with the secret key. The provided examples are exhaustive.
       uriParameters:
         decryptMode:
-          type: string
-          examples: ["RSA/NONE/NoPadding", "RSA/NONE/PKCS1Padding", "RSA/None/OAEPWithMd5AndMGF1Padding", "RSA/None/OAEPWithSha1AndMGF1Padding", "RSA/None/OAEPWithSha224AndMGF1Padding", "RSA/None/OAEPWithSha256AndMGF1Padding", "RSA/None/OAEPWithSha384AndMGF1Padding", "RSA/None/OAEPWithSha512AndMGF1Padding"]
+          enum: ["RSA/NONE/NoPadding", "RSA/NONE/PKCS1Padding", "RSA/None/OAEPWithMd5AndMGF1Padding", "RSA/None/OAEPWithSha1AndMGF1Padding", "RSA/None/OAEPWithSha224AndMGF1Padding", "RSA/None/OAEPWithSha256AndMGF1Padding", "RSA/None/OAEPWithSha384AndMGF1Padding", "RSA/None/OAEPWithSha512AndMGF1Padding"]
       post:
         securedBy: basic # User
         body:
@@ -225,8 +225,7 @@ types:
       description: Signature to be performed with the secret key. The provided examples are exhaustive.
       uriParameters:
         signMode:
-          type: string
-          examples: ["pkcs1", "pss/md5", "pss/sha1", "pss/sha224", "pss/sha256", "pss/sha384", "pss/sha512"]
+          enum: ["pkcs1", "pss/md5", "pss/sha1", "pss/sha224", "pss/sha256", "pss/sha384", "pss/sha512"]
       post:
         securedBy: basic # User
         body:
@@ -315,10 +314,10 @@ types:
           body:
             application/json:
               type: SystemInformation
-            example:
-              vendor: Nitrokey
-              product: NetHSM
-              version: 1.0
+              example:
+                vendor: Nitrokey
+                product: NetHSM
+                version: "1.0"
   /serial:
     description: The system's serial number should be derived from some hardware serials (e.g. CPU ID). TODO
     get:
