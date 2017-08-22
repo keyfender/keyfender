@@ -2,11 +2,11 @@
 
 // packageArchetype.java_application //Required for Heroku
 
-name := "NetHSM Test"
+name := "keyfender Test"
 
 version := "0.1"
 
-organization  := "com.nitrokey"
+organization  := "org.keyfender"
 
 scalaVersion  := "2.11.8"
 

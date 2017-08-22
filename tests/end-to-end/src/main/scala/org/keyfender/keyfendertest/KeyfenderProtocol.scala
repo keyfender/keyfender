@@ -1,4 +1,4 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import spray.json.DefaultJsonProtocol
 import spray.json.JsonFormat
@@ -20,7 +20,7 @@ import java.security.KeyFactory
  * The JSON classes we use with the API.
  * Notice that we can use the same object and the same JSON mapping as we defined in the API.
  */
-object NetHsmProtocol extends DefaultJsonProtocol {
+object KeyfenderProtocol extends DefaultJsonProtocol {
 
   implicit val encoding = base64Url.copy(strictPadding=true)
 

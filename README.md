@@ -1,26 +1,26 @@
-# NetHSM Unikernel
+# keyfender Unikernel
 
-[![Build Status](https://travis-ci.org/nethsm/nethsm.svg?branch=master)](https://travis-ci.org/nethsm/nethsm)
+[![Build Status](https://travis-ci.org/keyfender/keyfender.svg?branch=master)](https://travis-ci.org/keyfender/keyfender)
 
 ## Container
 
-To easily try out NetHSM, use the docker container `nethsm/nethsm`:
+To easily try out keyfender, use the docker container `keyfender/keyfender`:
 
 Run it as a real kvm VM instance:
 ```
-$ docker run --rm -ti --device=/dev/kvm:/dev/kvm --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 nethsm/nethsm
+$ docker run --rm -ti --device=/dev/kvm:/dev/kvm --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 keyfender/keyfender
 ```
 
 If kvm is not available, you can run it as a normal unix process on a tap
 device:
 ```
-$ docker run --rm -ti --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 nethsm/nethsm
+$ docker run --rm -ti --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 keyfender/keyfender
 ```
 
 If even tap devices are not available, you can run it on a normal network
 socket:
 ```
-$ docker run --rm -ti -p4433:4433 nethsm/nethsm
+$ docker run --rm -ti -p4433:4433 keyfender/keyfender
 ```
 
 ## Building
@@ -37,7 +37,7 @@ $ make run
 This will run the HSM on localhost on port 8080, so you should be
 able to access [http://localhost:8080/api/v0](http://localhost:8080/api/v0).
 
-For debug output start NetHSM by executing `MIRAGE_LOGS=debug ./src/nethsm`.
+For debug output start keyfender by executing `MIRAGE_LOGS=debug ./src/keyfender`.
 
 For a Xen DHCP kernel, do:
 
@@ -46,17 +46,17 @@ $ DHCP=true MODE=xen NET=direct make configure
 $ make build
 ```
 
-edit `nethsm.xl` to add a VIF, e.g. via:
+edit `keyfender.xl` to add a VIF, e.g. via:
 
 ```
 vif = ['bridge=xenbr0']
 ```
 
-And then run the VM via `xl create -c nethsm.xl`
+And then run the VM via `xl create -c keyfender.xl`
 
 ## API
 
-The API is described in "docs" folder. You can view it in the browser [here](https://www.nitrokey.com/sites/default/files/nethsm/api.html).
+The API is described in "docs" folder. You can view it in the browser [here](https://keyfender.github.io/api.html).
 
 ## Tutorial
 
@@ -65,7 +65,7 @@ First, let's see what we have here:
 ```
 $ curl -i -w "\n" -X GET localhost:8080/api/v0/system/information
 HTTP/1.1 200 OK
-{"vendor":"Nitrokey","product":"NetHSM","version":"0.1"}
+{"vendor":"keyfender","product":"keyfender","version":"0.1"}
 ```
 
 See what the device's status is:
@@ -85,7 +85,7 @@ $ curl -i -w "\n" -X GET localhost:8080/api/v0/keys
 HTTP/1.1 401 Unauthorized
 ```
 
-Ohh, NetHSM seems to have access control. In fact is has an Admin password and a User password. The Admin password is used to authenticate any kind of changes of the system, settings and keys. The User password is required to authenticate the usage of NetHSM without any modification.
+Ohh, keyfender seems to have access control. In fact is has an Admin password and a User password. The Admin password is used to authenticate any kind of changes of the system, settings and keys. The User password is required to authenticate the usage of keyfender without any modification.
 
 Before you can do anything with the system, the Admin password needs to be defined first. It doesn't has a default value.
 

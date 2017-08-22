@@ -1,4 +1,4 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import scala.collection.immutable.HashMap
 /**

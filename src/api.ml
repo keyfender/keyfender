@@ -108,7 +108,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
         | true, _ -> false
       then `Authorized
       else raise (Failure "wrong password")
-    with _ -> `Basic "nethsm"
+    with _ -> `Basic "keyfender"
 
   let is_authorized_as_user rd = has_valid_credentials ~admin:false rd
   let is_authorized_as_admin rd = has_valid_credentials ~admin:true rd
@@ -496,7 +496,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private to_json rd =
-      Wm.continue (`String "{\"vendor\":\"Nitrokey\",\"product\":\"NetHSM\",\"version\":\"0.1\"}") rd
+      Wm.continue (`String "{\"vendor\":\"keyfender\",\"product\":\"keyfender\",\"version\":\"0.1\"}") rd
 
     method! allowed_methods rd =
       Wm.continue [`GET] rd

@@ -13,13 +13,13 @@ if [ -e /dev/net/tun ] ; then
   ifconfig tap0 up
 
   if [ -e /dev/kvm ] ; then
-    echo "##### Starting NetHSM as kvm instance #####"
-    /ukvm-bin --net=tap0 /nethsm.ukvm --ipv4 $IP
+    echo "##### Starting keyfender as kvm instance #####"
+    /ukvm-bin --net=tap0 /keyfender.ukvm --ipv4 $IP
   else
-    echo "##### Starting NetHSM with direct network #####"
-    /nethsm.direct --interface tap0 --ipv4 $IP
+    echo "##### Starting keyfender with direct network #####"
+    /keyfender.direct --interface tap0 --ipv4 $IP
   fi
 else
-  echo "##### Starting NetHSM on unix socket #####"
-  /nethsm.socket
+  echo "##### Starting keyfender on unix socket #####"
+  /keyfender.socket
 fi

@@ -50,6 +50,7 @@ static*.ml
 static*.mli
 mir-*
 nethsm
+keyfender
 **/log
 make-fat*-image.sh
 key_gen.ml

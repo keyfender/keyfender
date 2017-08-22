@@ -44,10 +44,10 @@ build:
 	cd src && make build
 
 run:
-	cd src && ./nethsm
+	cd src && ./keyfender
 
 test:
-	src/nethsm & cd tests/end-to-end && sbt test ; sleep 1 ; kill $$!
+	src/keyfender & cd tests/end-to-end && sbt test ; sleep 1 ; kill $$!
 
 clean:
 	cd src && make clean ; mirage clean

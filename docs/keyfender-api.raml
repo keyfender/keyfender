@@ -1,5 +1,5 @@
 #%RAML 1.0
-title: Nitrokey NetHSM API
+title: keyfender API
 version: v0
 description: All <a href="https://tools.ietf.org/html/rfc4648#section-4">base64url</a> encoded values are Big Endian.
 baseUri: https://{hostName}:{hostPort}/api/{version}
@@ -91,9 +91,9 @@ types:
     additionalProperties: false
 
 /keys:
-  description: The keys being stored in the NetHSM.
+  description: The keys being stored in the keyfender.
   post:
-    description: Import or generate a key pair in(to) NetHSM at a specified location.
+    description: Import or generate a key pair in(to) keyfender at a specified location.
     securedBy: basic # Administrator
     body:
       application/json:
@@ -316,8 +316,8 @@ types:
             application/json:
               type: SystemInformation
             example:
-              vendor: Nitrokey
-              product: NetHSM
+              vendor: keyfender
+              product: keyfender
               version: 1.0
   /serial:
     description: The system's serial number should be derived from some hardware serials (e.g. CPU ID). TODO
@@ -380,7 +380,7 @@ types:
           404:
           500:
       post:
-        description: Import the public key to the NetHSM
+        description: Import the public key to the keyfender
         securedBy: basic # Administrator
         body:
           application/json:
@@ -403,7 +403,7 @@ types:
     /tls:
       description: This key pair and certificate are used for HTTPS/TLS.
       post:
-        description: Import or generate a key pair in(to) the NetHSM.
+        description: Import or generate a key pair in(to) the keyfender.
         securedBy: basic # Administrator
         body:
           application/json:

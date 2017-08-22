@@ -1,7 +1,7 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import spray.json._
-import NetHsmProtocol._
+import KeyfenderProtocol._
 import Crypto._
 import Base64._
 

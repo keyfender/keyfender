@@ -1,4 +1,4 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import com.typesafe.config._
 import collection.JavaConversions._
@@ -8,11 +8,11 @@ import collection.JavaConversions._
  */
 class Settings(var config: Config) {
   // non-lazy fields, we want all exceptions at construct time
-  // Get values for nethsm service:
-  val host = config.getString("nethsm.host")
-  val port = config.getInt("nethsm.port")
-  val prefix = config.getString("nethsm.prefix")
-  val tls = config.getBoolean("nethsm.tls")
+  // Get values for keyfender service:
+  val host = config.getString("keyfender.host")
+  val port = config.getInt("keyfender.port")
+  val prefix = config.getString("keyfender.prefix")
+  val tls = config.getBoolean("keyfender.tls")
   println("Settings loaded.")
 
   def fullHost: String = {
