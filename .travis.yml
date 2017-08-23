@@ -17,7 +17,7 @@ script: bash -ex .travis-script.sh
 after_success:
   - if [ "$TRAVIS_BRANCH" == "master" -a "$TRAVIS_EVENT_TYPE" != "cron" ]; then
     docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
-    export REPO=nethsm/nethsm;
+    export REPO=keyfender/keyfender;
     docker tag $REPO:latest $REPO:${TRAVIS_COMMIT::7};
     docker tag $REPO:latest $REPO:travis-$TRAVIS_BUILD_NUMBER;
     docker push $REPO;

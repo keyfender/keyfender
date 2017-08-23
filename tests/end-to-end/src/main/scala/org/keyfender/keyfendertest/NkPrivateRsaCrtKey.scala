@@ -1,10 +1,10 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.spec.RSAPrivateCrtKeySpec
 import java.security.KeyFactory
 import java.math.BigInteger
-import NetHsmProtocol._
+import KeyfenderProtocol._
 
 case class NkPrivateRsaCrtKey(
   modulus: Seq[Byte],

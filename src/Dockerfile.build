@@ -1,4 +1,4 @@
-FROM nethsm_buildbase
+FROM keyfender_buildbase
 
 ADD . /src
 RUN sudo chown -R opam /src

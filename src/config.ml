@@ -30,4 +30,4 @@ let main =
     "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> job)
 
 let () =
-  register "nethsm" [main $ default_posix_clock $ data $ certs $ https_srv]
+  register "keyfender" [main $ default_posix_clock $ data $ certs $ https_srv]

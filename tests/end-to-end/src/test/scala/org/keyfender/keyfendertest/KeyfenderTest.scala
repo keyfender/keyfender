@@ -1,4 +1,4 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import akka.actor.ActorSystem
 import akka.io.IO
@@ -12,7 +12,7 @@ import java.security.interfaces.RSAPublicKey
 import java.security.Security
 import java.security.cert.X509Certificate
 import javax.net.ssl.{KeyManager, SSLContext, X509TrustManager}
-import NetHsmProtocol._
+import KeyfenderProtocol._
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.PEMReader
 import org.scalatest.FeatureSpec
@@ -28,10 +28,10 @@ import spray.httpx.SprayJsonSupport._
 import spray.httpx.unmarshalling._
 
 /**
- * These tests are highly dependent and all together represent an entire lifecycle of a NetHSM.
+ * These tests are highly dependent and all together represent an entire lifecycle of a keyfender.
  * In case of error, focus on the first error because it may cause subsequent errors.
  */
-class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with IntegrationPatience {
+class KeyfenderTest extends FeatureSpec with LazyLogging with ScalaFutures with IntegrationPatience {
 
   //Load settings
   //TODO: Handle IOException
@@ -83,19 +83,19 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
 
   IO(Http) ! Http.HostConnectorSetup(settings.host, settings.port, sslEncryption = settings.tls)
 
-  feature("NetHSM tells it's system information") {
+  feature("keyfender tells it's system information") {
 
-    scenario("NetHSM system information") {
+    scenario("keyfender system information") {
       val pipeline: HttpRequest => Future[SystemInformationResponse] = sendReceive ~> unmarshal[SystemInformationResponse]
       val responseF = pipeline(Get(s"$apiLocation/system/information"))
       whenReady(responseF) { response =>
-        assert(response.vendor === "Nitrokey")
-        assert(response.product === "NetHSM")
+        assert(response.vendor === "keyfender")
+        assert(response.product === "keyfender")
         assert(response.version.nonEmpty)
       }
     }
 
-    scenario("NetHSM's status is up and running") {
+    scenario("keyfender's status is up and running") {
       val pipeline: HttpRequest => Future[SimpleResponse] = sendReceive ~> unmarshal[SimpleResponse]
       val responseF = pipeline(Get(s"$apiLocation/system/status"))
       //responseF onComplete {
@@ -649,7 +649,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
       }
     }
 
-    ignore("Client performs SHA256 hash and NetHSM signs the hash") {
+    ignore("Client performs SHA256 hash and keyfender signs the hash") {
       val cleartextMessage = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
       val messageHash = hash(cleartextMessage, "SHA256")
       val request = SignRequest(messageHash)
@@ -729,7 +729,7 @@ class NetHsmTest extends FeatureSpec with LazyLogging with ScalaFutures with Int
     scenario("Delete RSA key") {
       pubKeys.map{ pubKey =>
         val keyLength = pubKey.publicKey.modulus.length*8
-        info(s"A RSA key with $keyLength bit in NetHSM")
+        info(s"A RSA key with $keyLength bit in keyfender")
         val pipeline: HttpRequest => Future[HttpResponse] = (
           addCredentials(BasicHttpCredentials("admin", adminPassword))
           ~> sendReceive

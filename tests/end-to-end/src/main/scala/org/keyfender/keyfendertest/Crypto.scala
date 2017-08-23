@@ -1,4 +1,4 @@
-package com.nitrokey.nethsmtest
+package org.keyfender.keyfendertest
 
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -24,7 +24,7 @@ import org.bouncycastle.crypto.engines.RSAEngine
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.security.spec.RSAPrivateCrtKeySpec
-import NetHsmProtocol._
+import KeyfenderProtocol._
 import javax.crypto.Cipher
 
 /**
