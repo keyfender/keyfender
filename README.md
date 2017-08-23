@@ -56,7 +56,7 @@ And then run the VM via `xl create -c keyfender.xl`
 
 ## API
 
-The API is described in "docs" folder. You can view it in the browser [here](https://keyfender.github.io/api.html).
+The API is described in "docs" folder. You can view it in the browser [here](https://keyfender.github.io/api/).
 
 ## Tutorial
 
