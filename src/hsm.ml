@@ -87,11 +87,11 @@ end
 module HTTPS
     (Pclock: Mirage_types.PCLOCK)
     (DATA: Mirage_types_lwt.KV_RO)
-    (KEYS: Mirage_types_lwt.KV_RO)
+    (CERTS: Mirage_types_lwt.KV_RO)
     (Http: HTTP) =
 struct
 
-  module X509 = Tls_mirage.X509(KEYS)(Pclock)
+  module X509 = Tls_mirage.X509(CERTS)(Pclock)
   module D = Dispatch(DATA)(Http)
 
   let tls_init kv =
@@ -99,8 +99,8 @@ struct
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start _clock data keys http =
-    tls_init keys >>= fun cfg ->
+  let start _clock data certs http =
+    tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
     let http_port = Key_gen.http_port () in

@@ -46,16 +46,16 @@ module Config = struct
   type t =
     | Pass_admin
     | Pass_user
-  let settings = [
-    Pass_admin, ref "";
+  let settings = lazy [
+    Pass_admin, ref (Key_gen.admin_password ());
     Pass_user, ref "";
   ]
   let set k v =
-    try let r = List.assoc k settings in
+    try let r = List.assoc k (Lazy.force settings) in
       r := v ; true
     with Not_found -> false
   let get k =
-    try Some !(List.assoc k settings)
+    try Some !(List.assoc k (Lazy.force settings))
     with Not_found -> None
 end
 
