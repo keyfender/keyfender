@@ -32,11 +32,27 @@ opam pin -n remove $(opam pin list -s)
 opam pin -n add webmachine 0.3.2
 
 # install mirage and it's system dependencies
-opam depext -i mirage
+opam depext -i mirage=3.0.4
+opam pin -n add mirage 3.0.4
 
 # bring cache up-to-date
 opam update
 
 # make sure we are in a stable state
+opam upgrade
 opam upgrade --fixup
 EOF
+
+if [ -n "$BUILD_UI" ] ; then
+  apk add --no-cache --purge -U nodejs nodejs-npm git
+  git clone --depth=1 https://github.com/keyfender/keyfender-ui
+  cd keyfender-ui
+  npm install
+  npm run build
+  mkdir /htdocs
+  cp -a index.html dist /htdocs
+  cd ..
+  rm -rf /root/.npm
+  rm -rf keyfender-ui
+  apk del nodejs
+fi

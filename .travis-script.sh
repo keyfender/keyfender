@@ -2,6 +2,7 @@
 
 export APK_CACHE=$HOME/.apk-cache
 export OPAM_DIR=$HOME/.opam
+export BUILD_UI=1
 
 # build keyfender container
 docker/build-all-in-one.sh

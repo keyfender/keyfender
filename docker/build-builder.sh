@@ -14,6 +14,7 @@ docker run --name keyfender_tmp \
   $BUILD_VOLUMES \
   -v $DIR/container-scripts/buildbase.sh:/buildbase.sh:ro \
   -e OCAML_VERSION=$OCAML_VERSION \
+  -e BUILD_UI=$BUILD_UI \
   alpine /buildbase.sh
 docker commit \
   -c 'USER opam' \
