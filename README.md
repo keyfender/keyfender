@@ -2,6 +2,12 @@
 
 [![Build Status](https://travis-ci.org/keyfender/keyfender.svg?branch=master)](https://travis-ci.org/keyfender/keyfender)
 
+## Demo
+
+A simple demo case - nginx with pkcs#11 driver using a keyfender
+instance for private key storage - is available
+[here](https://keyfender.org:4434).
+
 ## Container
 
 To easily try out keyfender, use the docker container `keyfender/keyfender`:
