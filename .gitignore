@@ -24,7 +24,7 @@ setup.log
 
 # mirage
 .*.swp
-.merlin
+#.merlin
 *.xe
 *.xml
 backend.ml
