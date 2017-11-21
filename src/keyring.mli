@@ -20,7 +20,7 @@ val pem_of_pub : pub -> string
 type storage
 (** storage for keys *)
 
-val create : unit -> storage
+val create : unit -> storage Lwt.t
 (** create a storage *)
 
 val add : storage -> key:Yojson.Basic.json -> string result Lwt.t

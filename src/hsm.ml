@@ -106,7 +106,7 @@ struct
     let http_port = Key_gen.http_port () in
     let tcp = `TCP http_port in
     (* create the database *)
-    let keyring = Keyring.create () in
+    Keyring.create () >>= fun keyring ->
     let https =
       Https_log.info (fun f -> f "listening on %d/TCP" https_port);
       http tls @@ D.serve (D.dispatcher data keyring)

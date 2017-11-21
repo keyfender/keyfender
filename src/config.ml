@@ -27,6 +27,8 @@ let main =
     package "yojson";
     (* https://github.com/inhabitedtype/ocaml-webmachine/issues/73 *)
     package ~min:"0.3.2" ~max:"0.4.0" "webmachine";
+    package "irmin-mem";
+    package "ppx_sexp_conv";
   ] in
   let keys = [ http_port; https_port; admin_password ] in
   foreign

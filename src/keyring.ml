@@ -1,4 +1,5 @@
 open Lwt.Infix
+open Sexplib.Std
 
 exception Failure_exn of Yojson.Basic.json
 
@@ -11,10 +12,13 @@ module YB = Yojson.Basic
 module Priv = struct
   type data =
     | Rsa of Nocrypto.Rsa.priv
+    [@@deriving sexp]
   type t = {
     purpose: string;
     data: data;
-  }
+  } [@@deriving sexp]
+  let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
+  let of_string s = t_of_sexp (Sexplib.Sexp.of_string s)
 end
 
 module Pub = struct
@@ -36,8 +40,10 @@ module Padding = struct
     | PSS of Nocrypto.Hash.hash
 end
 
-type storage = (string * Priv.t) list Lwt_mvar.t
-
+module Storage = Irmin_mem.KV(Irmin.Contents.String)
+let storage_config = Irmin_mem.config ()
+type storage = Storage.t
+let info _ = Irmin.Info.none
 
 (* helper functions *)
 
@@ -150,10 +156,10 @@ let priv_of_json json =
 module Db = struct
   let create () =
     Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
-    Lwt_mvar.create []
+    Storage.Repo.v storage_config >>= Storage.master
 
   (* let id  = ref 0 *)
-  let rec new_id l =
+  let rec new_id db =
     let n = 20 in
     let alphanum =
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
@@ -163,70 +169,56 @@ module Db = struct
       Bytes.set id i alphanum.[Random.int len]
     done;
     let id' = Bytes.to_string id in
-    if (List.mem_assoc id' l) then
-      new_id l
-    else
-      id'
-
-  let with_db db ~f =
-    Lwt_mvar.take db
-    >>= (fun l ->
-      Lwt.catch (fun () ->
-        Lwt.wrap1 f l
-      )(function
-        | e -> Lwt_mvar.put db l
-          >>= fun () -> Lwt.fail e
-      )
-    )
-    >>= (fun (result, l') ->
-      Lwt_mvar.put db l'
-      >|= fun () -> result
-    )
+    Storage.mem db ["keys"; id'] >>= function
+      | true -> new_id db
+      | false -> Lwt.return id'
 
   let get db id =
-    with_db db ~f:(fun l ->
-      if (List.mem_assoc id l) then
-        (Some (List.assoc id l), l)
-      else
-        (None, l))
+    Storage.find db ["keys"; id]
+    >|= function
+    | Some v -> Some (Priv.of_string v)
+    | None -> None
 
   let get_all db =
-    with_db db ~f:(fun l -> (l, l))
+    Storage.list db ["keys"]
+    >|= fun l ->
+    let f a e =
+      match e with
+      | (k, `Contents) -> k :: a
+      | _ -> a
+    in
+    List.fold_left f [] l
 
   let add db id e =
-    with_db db ~f:(fun l ->
-      let id' = match id with
-        | Some x ->
-          if (List.mem_assoc x l) then
-            failwith_desc "key id already exists"
-          else
-            x
-        | None -> new_id l
-      in
-      let l' = List.merge (fun x y -> compare (fst x) (fst y)) [id', e] l in
-      (id', l'))
+    begin
+    match id with
+      | Some id ->
+        begin Storage.mem db ["keys"; id] >>= function
+          | true -> failwith_desc "key id already exists"
+          | false -> Lwt.return id
+        end
+      | None -> new_id db
+    end
+    >>= fun id ->
+    Storage.set db ~info:(info "Adding key") ["keys"; id] (Priv.to_string e)
+    >>= fun () ->
+    Lwt.return id
 
   let put db id e =
-    let found = ref false in
-    with_db db ~f:(fun l ->
-      let l' = List.map (fun (id', e') ->
-        if id' = id
-          then begin found := true; (id', e) end
-          else (id', e'))
-        l
-      in
-      (!found, l'))
+    Storage.mem db ["keys"; id] >>= function
+      | false -> Lwt.return false
+      | true ->
+    Storage.set db ~info:(info "Updating key") ["keys"; id] (Priv.to_string e)
+    >>= fun () ->
+    Lwt.return true
 
   let delete db id =
-    let deleted = ref false in
-    with_db db ~f:(fun l ->
-      let l' = List.filter (fun (id', _) ->
-        if id' = id
-          then begin deleted := true; false end
-          else true)
-        l
-      in
-      (!deleted, l'))
+    Storage.mem db ["keys"; id] >>= function
+      | false -> Lwt.return false
+      | true ->
+    Storage.remove db ~info:(info "Updating key") ["keys"; id]
+    >>= fun _ ->
+    Lwt.return true
 end
 
 
@@ -290,8 +282,7 @@ let get ks ~id = Db.get ks id >|= function
   | None -> None
   | Some k -> Some (pub_of_priv k)
 
-let get_all ks = Db.get_all ks >|= List.map (fun (id, _) ->
-    id)
+let get_all ks = Db.get_all ks
 
 let decrypt ks ~id ~padding ~data =
   Db.get ks id
