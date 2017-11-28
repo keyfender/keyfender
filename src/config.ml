@@ -3,7 +3,10 @@ open Mirage
 let stack = generic_stackv4 default_network
 let data = generic_kv_ro "htdocs"
 (* set ~tls to false to get a plain-http server *)
-let https_srv = http_server @@ conduit_direct ~tls:true stack
+
+let res_dns = resolver_dns stack
+let con = conduit_direct ~tls:true stack
+let https_srv = Mirage.http_server @@ con
 
 let http_port =
   let doc = Key.Arg.info ~doc:"Listening HTTP port." ["http"] in
@@ -18,7 +21,13 @@ let https_port =
 
 let admin_password =
   let doc = Key.Arg.info ~doc:"Initial admin password." ["password"] in
-  Key.abstract Key.(create "admin_password" Arg.(opt ~stage:`Both string "" doc))
+  Key.abstract Key.(create "admin_password" 
+    Arg.(opt ~stage:`Both string "" doc))
+
+let irmin_url =
+  let doc = Key.Arg.info ~doc:"URL of remote Irmin server" ["irmin-url"] in
+  Key.abstract Key.(create "irmin_url"
+    Arg.(opt ~stage:`Both string "" doc))
 
 let main =
   let packages = [
@@ -27,13 +36,17 @@ let main =
     package "yojson";
     (* https://github.com/inhabitedtype/ocaml-webmachine/issues/73 *)
     package ~min:"0.3.2" ~max:"0.4.0" "webmachine";
+    package "irmin-http";
     package "irmin-mem";
+    package "cohttp.lwt";
     package "ppx_sexp_conv";
   ] in
-  let keys = [ http_port; https_port; admin_password ] in
+  let keys = [ http_port; https_port; admin_password; irmin_url ] in
   foreign
     ~packages ~keys
-    "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> job)
+    "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> resolver @-> conduit
+      @-> job)
 
 let () =
-  register "keyfender" [main $ default_posix_clock $ data $ certs $ https_srv]
+  register "keyfender" [main $ default_posix_clock $ data $ certs $ https_srv $
+    res_dns $ con]

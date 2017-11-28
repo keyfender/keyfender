@@ -59,31 +59,30 @@ module Config = struct
     with Not_found -> None
 end
 
-let jsend_success data =
-  let l = match data with
-    | `Null -> []
-    | d -> ["data", d]
-  in
-  `Assoc (("status", `String "success") :: l)
+module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
+  let jsend_success data =
+    let l = match data with
+      | `Null -> []
+      | d -> ["data", d]
+    in
+    `Assoc (("status", `String "success") :: l)
 
-let jsend_failure data =
-  let l = match data with
-    | `Null -> []
-    | d -> ["data", d]
-  in
-  `Assoc (("status", `String "failure") :: l)
+  let jsend_failure data =
+    let l = match data with
+      | `Null -> []
+      | d -> ["data", d]
+    in
+    `Assoc (("status", `String "failure") :: l)
 
-let jsend_error msg =
-  `Assoc [
-    ("status", `String "error");
-    ("message", `String msg)
-  ]
+  let jsend_error msg =
+    `Assoc [
+      ("status", `String "error");
+      ("message", `String msg)
+    ]
 
-let jsend = function
-  | Keyring.Ok json -> jsend_success json
-  | Keyring.Failure json -> jsend_failure json
-
-module Dispatch (H:Cohttp_lwt.Server) = struct
+  let jsend = function
+    | KR.Ok json -> jsend_success json
+    | KR.Failure json -> jsend_failure json
 
   (* Apply the [Webmachine.Make] functor to the Lwt_unix-based IO module
    * exported by cohttp. For added convenience, include the [Rd] module
@@ -128,7 +127,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
     inherit [Cohttp_lwt_body.t] Wm.resource
 
     method private to_json rd =
-      Keyring.get_all keyring
+      KR.get_all keyring
       >|= List.map (fun id -> `Assoc [
           ("id", `String id);
           ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode id))
@@ -160,16 +159,16 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
       try
         Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
         let key = YB.from_string body in
-        Keyring.add keyring ~key
+        KR.add keyring ~key
         >>= function
-          | Keyring.Ok new_id ->
+          | KR.Ok new_id ->
             let resp_body = `String (jsend_success (`Assoc [
                 ("id", `String new_id);
                 ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode new_id))
               ]) |> YB.pretty_to_string ~std:true)
             in
             Wm.continue true { rd with Wm.Rd.resp_body }
-          | Keyring.Failure json ->
+          | KR.Failure json ->
             let body =
               `String (jsend_failure json |> YB.pretty_to_string ~std:true) in
             Wm.respond ~body 400 rd
@@ -191,12 +190,12 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
         >>= fun body ->
           let key = YB.from_string body in
           let id = self#id rd in
-          Keyring.put keyring ~id ~key
+          KR.put keyring ~id ~key
         >|= function
-          | Keyring.Ok true -> jsend_success `Null
-          | Keyring.Ok false -> assert false (* can't happen, because of
+          | KR.Ok true -> jsend_success `Null
+          | KR.Ok false -> assert false (* can't happen, because of
                                                 resource_exists *)
-          | Keyring.Failure json -> jsend_failure json
+          | KR.Failure json -> jsend_failure json
       with
         | e -> Lwt.return (Printexc.to_string e |> jsend_error)
       end
@@ -208,19 +207,19 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method private to_json rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
         | None     -> assert false
-        | Some key -> let json = Keyring.json_of_pub id key in
+        | Some key -> let json = KR.json_of_pub id key in
           let json_s = jsend_success json |> YB.pretty_to_string ~std:true in
           Wm.continue (`String json_s) rd
 
     method private to_pem rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
         | None     -> assert false
-        | Some key -> let pem = Keyring.pem_of_pub key in
+        | Some key -> let pem = KR.pem_of_pub key in
           Wm.continue (`String pem) rd
 
     method! allowed_methods rd =
@@ -228,7 +227,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method! resource_exists rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -253,7 +252,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method! delete_resource  rd =
       let id = self#id rd in
-      Keyring.del keyring ~id
+      KR.del keyring ~id
       >>= fun deleted ->
         let resp_body =
           if deleted
@@ -273,10 +272,10 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method private to_pem rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
         | None            -> assert false
-        | Some key -> let pem = Keyring.pem_of_pub key in
+        | Some key -> let pem = KR.pem_of_pub key in
           Wm.continue (`String pem) rd
 
     method! allowed_methods rd =
@@ -284,7 +283,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method! resource_exists rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -327,7 +326,7 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
 
     method! resource_exists rd =
       let id = self#id rd in
-      Keyring.get keyring ~id
+      KR.get keyring ~id
       >>= function
       | None   -> Wm.continue false rd
       | Some _ ->
@@ -370,20 +369,20 @@ module Dispatch (H:Cohttp_lwt.Server) = struct
       let hash_type = self#hash_type rd in
       match (action, padding, hash_type) with
         | Action.Decrypt, Padding.None,   `None ->
-          let padding = Keyring.Padding.None in
-          Keyring.decrypt keyring ~id ~padding
+          let padding = KR.Padding.None in
+          KR.decrypt keyring ~id ~padding
         | Action.Decrypt, Padding.PKCS1,  `None ->
-          let padding = Keyring.Padding.PKCS1 in
-          Keyring.decrypt keyring ~id ~padding
+          let padding = KR.Padding.PKCS1 in
+          KR.decrypt keyring ~id ~padding
         | Action.Sign,    Padding.PKCS1,  `None ->
-          let padding = Keyring.Padding.PKCS1 in
-          Keyring.sign keyring ~id ~padding
+          let padding = KR.Padding.PKCS1 in
+          KR.sign keyring ~id ~padding
         | Action.Decrypt, Padding.OAEP,   (#Nocrypto.Hash.hash as h) ->
-          let padding = Keyring.Padding.OAEP h in
-          Keyring.decrypt keyring ~id ~padding
+          let padding = KR.Padding.OAEP h in
+          KR.decrypt keyring ~id ~padding
         | Action.Sign,    Padding.PSS,    (#Nocrypto.Hash.hash as h) ->
-          let padding = Keyring.Padding.PSS h in
-          Keyring.sign keyring ~id ~padding
+          let padding = KR.Padding.PSS h in
+          KR.sign keyring ~id ~padding
         | _, _, #Nocrypto.Hash.hash
         | _, _, `None
           -> raise @@ Failure "invalid action resource"

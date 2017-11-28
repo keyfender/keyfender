@@ -1,6 +1,6 @@
-PKG lwt mirage mirage-types-lwt mirage-http
+PKG lwt mirage mirage-types-lwt cohttp-mirage mirage-conduit
 PKG uri magic-mime yojson webmachine nocrypto 
-PKG irmin-mem ppx_sexp_conv
+PKG irmin-mem irmin-http ppx_sexp_conv
 S src
 B src/_build
 B src/_build-ukvm

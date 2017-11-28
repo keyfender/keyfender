@@ -1,6 +1,12 @@
 open Lwt.Infix
 open Sexplib.Std
 
+module type S = S.Keyring
+
+module Make
+    (KV: Irmin.KV_MAKER)
+= struct
+
 exception Failure_exn of Yojson.Basic.json
 
 type 'a result =
@@ -38,8 +44,7 @@ module Padding = struct
     | PSS of Nocrypto.Hash.hash
 end
 
-module Storage = Irmin_mem.KV(Contents.Sexp(Priv))
-let storage_config = Irmin_mem.config ()
+module Storage = KV(Contents.Sexp(Priv))
 type storage = Storage.t
 let info _ = Irmin.Info.none
 
@@ -152,9 +157,9 @@ let priv_of_json json =
 (* Simple database to store the items *)
 
 module Db = struct
-  let create () =
+  let create config =
     Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
-    Storage.Repo.v storage_config >>= Storage.master
+    Storage.Repo.v config >>= Storage.master
 
   (* let id  = ref 0 *)
   let rec new_id db =
@@ -241,7 +246,7 @@ let json_of_pub id { Pub.purpose; data } =
   in
   `Assoc (json_hd @ json_data)
 
-let create () = Db.create ()
+let create config = Db.create config
 
 let add ks ~key =
   Lwt.catch (fun () ->
@@ -356,3 +361,5 @@ let sign ks ~id ~padding ~data =
       Ok (`Assoc ["signedMessage", `String signed_b64])
   with
     | Failure_exn json -> Failure json
+
+end (*Make*)

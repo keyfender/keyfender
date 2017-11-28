@@ -1,7 +1,7 @@
 open Lwt.Infix
 
 (** Common signature for http and https. *)
-module type HTTP = Cohttp_lwt.Server
+module type HTTP = Cohttp_lwt.S.Server
 
 (* Logging *)
 let https_src = Logs.Src.create "https" ~doc:"HTTPS server"
@@ -10,9 +10,13 @@ module Https_log = (val Logs.src_log https_src : Logs.LOG)
 let http_src = Logs.Src.create "http" ~doc:"HTTP server"
 module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
-module Dispatch (FS: Mirage_types_lwt.KV_RO) (S: HTTP) = struct
+module Dispatch
+    (FS: Mirage_types_lwt.KV_RO)
+    (S: HTTP)
+    (KR: Keyring.S)
+= struct
 
-  module API = Api.Dispatch(S)
+  module API = Api.Dispatch(S)(KR)
 
   let failf fmt = Fmt.kstrf Lwt.fail_with fmt
 
@@ -52,11 +56,11 @@ module Dispatch (FS: Mirage_types_lwt.KV_RO) (S: HTTP) = struct
            S.respond_not_found ())
 
   let dispatcher fs keyring request body =
-   let uri = Cohttp.Request.uri request in
-   if starts_with (Uri.path uri) "/api/" then
-     API.dispatcher keyring request body
-   else
-     dispatch_file fs uri
+    let uri = Cohttp.Request.uri request in
+    if starts_with (Uri.path uri) "/api/" then
+      API.dispatcher keyring request body
+    else
+      dispatch_file fs uri
 
   (* Redirect to the same address, but in https. *)
   let redirect port request _body =
@@ -88,25 +92,48 @@ module HTTPS
     (Pclock: Mirage_types.PCLOCK)
     (DATA: Mirage_types_lwt.KV_RO)
     (CERTS: Mirage_types_lwt.KV_RO)
-    (Http: HTTP) =
-struct
+    (Http: HTTP)
+    (RES: Resolver_lwt.S)
+    (CON: Conduit_mirage.S)
+= struct
 
   module X509 = Tls_mirage.X509(CERTS)(Pclock)
-  module D = Dispatch(DATA)(Http)
 
   let tls_init kv =
     X509.certificate kv `Default >>= fun cert ->
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start _clock data certs http =
+  let start _clock data certs http res_dns con =
+    let module Client =
+    struct
+      include Cohttp_mirage.Client
+      let call ?ctx:_ = call ~ctx:(ctx res_dns con)
+    end
+    in
+    let irmin_url = Key_gen.irmin_url () in
+    let (
+      (module KV: Irmin.KV_MAKER),
+      storage_config
+    ) = match irmin_url with
+      | "" -> (
+        (module Irmin_mem.KV : Irmin.KV_MAKER),
+        Irmin_mem.config ()
+      )
+      | url -> (
+        (module Irmin_http.KV(Client) : Irmin.KV_MAKER),
+        Irmin_http.config (Uri.of_string url)
+      )
+    in
+    let module KR = Keyring.Make(KV) in
+    let module D = Dispatch(DATA)(Http)(KR) in
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
     let http_port = Key_gen.http_port () in
     let tcp = `TCP http_port in
     (* create the database *)
-    Keyring.create () >>= fun keyring ->
+    KR.create storage_config >>= fun keyring ->
     let https =
       Https_log.info (fun f -> f "listening on %d/TCP" https_port);
       http tls @@ D.serve (D.dispatcher data keyring)

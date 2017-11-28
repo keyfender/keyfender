@@ -7,9 +7,9 @@ struct
   let of_raw x : t = Marshal.from_string x 0
   let t = Irmin.Type.(like string) of_raw to_raw
   let merge = Irmin.Merge.idempotent (Irmin.Type.option t)
-  let of_string s = 
+  let of_string s =
     Ok (T.t_of_sexp @@ Sexplib.Sexp.of_string s)
-  let to_string x = 
+  let to_string x =
     Sexplib.Sexp.to_string @@ T.sexp_of_t x
   let pp ppf x =
     Fmt.pf ppf "%s" (to_string x)
