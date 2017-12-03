@@ -17,8 +17,6 @@ module Priv = struct
     purpose: string;
     data: data;
   } [@@deriving sexp]
-  let to_string t = Sexplib.Sexp.to_string (sexp_of_t t)
-  let of_string s = t_of_sexp (Sexplib.Sexp.of_string s)
 end
 
 module Pub = struct
@@ -40,7 +38,7 @@ module Padding = struct
     | PSS of Nocrypto.Hash.hash
 end
 
-module Storage = Irmin_mem.KV(Irmin.Contents.String)
+module Storage = Irmin_mem.KV(Contents.Sexp(Priv))
 let storage_config = Irmin_mem.config ()
 type storage = Storage.t
 let info _ = Irmin.Info.none
@@ -175,9 +173,6 @@ module Db = struct
 
   let get db id =
     Storage.find db ["keys"; id]
-    >|= function
-    | Some v -> Some (Priv.of_string v)
-    | None -> None
 
   let get_all db =
     Storage.list db ["keys"]
@@ -200,7 +195,7 @@ module Db = struct
       | None -> new_id db
     end
     >>= fun id ->
-    Storage.set db ~info:(info "Adding key") ["keys"; id] (Priv.to_string e)
+    Storage.set db ~info:(info "Adding key") ["keys"; id] e
     >>= fun () ->
     Lwt.return id
 
@@ -208,7 +203,7 @@ module Db = struct
     Storage.mem db ["keys"; id] >>= function
       | false -> Lwt.return false
       | true ->
-    Storage.set db ~info:(info "Updating key") ["keys"; id] (Priv.to_string e)
+    Storage.set db ~info:(info "Updating key") ["keys"; id] e
     >>= fun () ->
     Lwt.return true
 
