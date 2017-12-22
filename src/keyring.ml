@@ -152,10 +152,7 @@ let priv_of_json json =
   Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
     |> function `RSA key -> key *)
 
-
-
-(* Simple database to store the items *)
-
+(* Database interface to Irmin *)
 module Db = struct
   let create config =
     Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
@@ -220,7 +217,6 @@ module Db = struct
     >>= fun _ ->
     Lwt.return true
 end
-
 
 
 (******************** public functions ********************)
