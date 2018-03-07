@@ -3,7 +3,7 @@
 apk update
 apk upgrade
 #apk add alpine-sdk openssh bash nano ncurses-dev rsync xz opam aspcud
-apk add gcc make autoconf patch gmp-dev m4 opam aspcud musl-dev sudo bash libressl-dev linux-headers zlib-dev
+apk add gcc make autoconf patch gmp-dev m4 opam aspcud musl-dev sudo bash libressl-dev linux-headers zlib-dev git
 adduser -D opam
 chown -R opam:opam /home/opam # in case it's bind mounted
 echo 'opam ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/opam
@@ -29,11 +29,11 @@ opam pin -n remove $(opam pin list -s)
 # webmachine 0.4.0 requires calendar which is not compatible with
 # mirage
 # https://github.com/inhabitedtype/ocaml-webmachine/issues/73
-opam pin -n add webmachine 0.3.2
+opam pin -n add webmachine https://github.com/ansiwen/ocaml-webmachine.git#remove-calendar
+opam pin -n add irmin-http https://github.com/ansiwen/irmin.git#new-webmachine
 
 # install mirage and it's system dependencies
-opam depext -i mirage=3.0.4
-opam pin -n add mirage 3.0.4
+opam depext -i mirage
 
 # bring cache up-to-date
 opam update
