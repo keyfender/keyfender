@@ -59,7 +59,7 @@ module Config = struct
     with Not_found -> None
 end
 
-module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
+module Dispatch (H:Cohttp_lwt.S.Server)(KR:Keyring.S)(DATE:Wm_util.Date_sig) = struct
   let jsend_success data =
     let l = match data with
       | `Null -> []
@@ -90,7 +90,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
    * access request-related information. *)
   module Wm = struct
     module Rd = Webmachine.Rd
-    include Webmachine.Make(H.IO)
+    include Webmachine.Make(H.IO)(DATE)
   end
 
   let has_valid_credentials ~admin rd =
@@ -124,7 +124,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
       a new key via POST. Check the [Location] header of a successful POST
       response for the URI of the key. *)
   class keys keyring = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_json rd =
       KR.get_all keyring
@@ -157,7 +157,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
 
     method! process_post rd =
       try
-        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body >>= fun body ->
+        Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body >>= fun body ->
         let key = YB.from_string body in
         KR.add keyring ~key
         >>= function
@@ -182,11 +182,11 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
   (** A resource for querying an individual key in the database by id via GET,
       modifying an key via PUT, and deleting an key via DELETE. *)
   class key keyring = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private of_json rd =
       begin try
-        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
           let key = YB.from_string body in
           let id = self#id rd in
@@ -268,7 +268,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
   (** A resource for querying an individual key in the database by id via GET,
       modifying an key via PUT, and deleting an key via DELETE. *)
   class pem_key keyring = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_pem rd =
       let id = self#id rd in
@@ -311,7 +311,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
       actions are sent in a JSON body, and the result is returned with a JSON
       body as well. *)
   class key_actions keyring = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method! allowed_methods rd =
       Wm.continue [`POST] rd
@@ -350,7 +350,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
 
     method! process_post rd =
       begin try
-        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
         let data = YB.from_string body in
         self#action_dispatch_exn rd ~data
@@ -416,11 +416,11 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
 
   (** A resource for passwords *)
   class passwords = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private of_json rd =
       begin try
-        Cohttp_lwt_body.to_string rd.Wm.Rd.req_body
+        Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body
         >>= fun body ->
           let new_password = YB.from_string body
             |> YB.Util.member "newPassword"
@@ -473,7 +473,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
 
   (** A resource for querying system status *)
   class status = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_json rd =
       Wm.continue (`String "{\n  \"status\": \"ok\"\n}\n") rd
@@ -492,7 +492,7 @@ module Dispatch (H:Cohttp_lwt.Server)(KR:Keyring.S) = struct
 
   (** A resource for providing product information *)
   class information = object(self)
-    inherit [Cohttp_lwt_body.t] Wm.resource
+    inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_json rd =
       Wm.continue (`String "{\"vendor\":\"keyfender\",\"product\":\"keyfender\",\"version\":\"0.1\"}") rd

@@ -14,9 +14,10 @@ module Dispatch
     (FS: Mirage_types_lwt.KV_RO)
     (S: HTTP)
     (KR: Keyring.S)
+    (DATE: Wm_util.Date_sig)
 = struct
 
-  module API = Api.Dispatch(S)(KR)
+  module API = Api.Dispatch(S)(KR)(DATE)
 
   let failf fmt = Fmt.kstrf Lwt.fail_with fmt
 
@@ -104,7 +105,7 @@ module HTTPS
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start _clock data certs http res_dns con =
+  let start clock data certs http res_dns con =
     let module Client =
     struct
       include Cohttp_mirage.Client
@@ -126,7 +127,10 @@ module HTTPS
       )
     in
     let module KR = Keyring.Make(KV) in
-    let module D = Dispatch(DATA)(Http)(KR) in
+    let module DATE = Wm_util.MakePtimeDate(struct
+      let now = fun () -> Ptime.v @@ Pclock.now_d_ps clock
+    end) in
+    let module D = Dispatch(DATA)(Http)(KR)(DATE) in
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
