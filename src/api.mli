@@ -1,5 +1,5 @@
 
-module Dispatch (H:Cohttp_lwt.Server) : sig
-  val dispatcher : Keyring.storage -> Cohttp.Request.t -> Cohttp_lwt_body.t
-    -> (Cohttp.Response.t * Cohttp_lwt_body.t) Lwt.t
+module Dispatch (H:Cohttp_lwt.S.Server)(DATE:Wm_util.Date_sig) : sig
+  val dispatcher : Keyring.storage -> Cohttp.Request.t -> Cohttp_lwt.Body.t
+    -> (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t
 end

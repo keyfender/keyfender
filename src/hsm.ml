@@ -1,7 +1,7 @@
 open Lwt.Infix
 
 (** Common signature for http and https. *)
-module type HTTP = Cohttp_lwt.Server
+module type HTTP = Cohttp_lwt.S.Server
 
 (* Logging *)
 let https_src = Logs.Src.create "https" ~doc:"HTTPS server"
@@ -10,9 +10,9 @@ module Https_log = (val Logs.src_log https_src : Logs.LOG)
 let http_src = Logs.Src.create "http" ~doc:"HTTP server"
 module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
-module Dispatch (FS: Mirage_types_lwt.KV_RO) (S: HTTP) = struct
+module Dispatch (FS: Mirage_types_lwt.KV_RO) (S: HTTP) (DATE: Wm_util.Date_sig) = struct
 
-  module API = Api.Dispatch(S)
+  module API = Api.Dispatch(S)(DATE)
 
   let failf fmt = Fmt.kstrf Lwt.fail_with fmt
 
@@ -92,14 +92,17 @@ module HTTPS
 struct
 
   module X509 = Tls_mirage.X509(CERTS)(Pclock)
-  module D = Dispatch(DATA)(Http)
 
   let tls_init kv =
     X509.certificate kv `Default >>= fun cert ->
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start _clock data certs http =
+  let start clock data certs http =
+    let module DATE = Wm_util.MakePtimeDate(struct
+      let now = fun () -> Ptime.v @@ Pclock.now_d_ps clock
+    end) in
+    let module D = Dispatch(DATA)(Http)(DATE) in
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
