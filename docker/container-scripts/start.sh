@@ -1,5 +1,7 @@
 #!/bin/sh -e
 
+ARGS=$*
+
 export MIRAGE_LOGS=${MIRAGE_LOGS:-debug}
 
 if [ -e /dev/net/tun ] ; then
@@ -14,12 +16,12 @@ if [ -e /dev/net/tun ] ; then
 
   if [ -e /dev/kvm ] ; then
     echo "##### Starting keyfender as kvm instance #####"
-    /ukvm-bin --net=tap0 /keyfender.ukvm --ipv4 $IP
+    /ukvm-bin --net=tap0 /keyfender.ukvm --ipv4 $IP $ARGS
   else
     echo "##### Starting keyfender with direct network #####"
-    /keyfender.direct --interface tap0 --ipv4 $IP
+    /keyfender.direct --interface tap0 --ipv4 $IP $ARGS
   fi
 else
   echo "##### Starting keyfender on unix socket #####"
-  /keyfender.socket
+  /keyfender.socket $ARGS
 fi
