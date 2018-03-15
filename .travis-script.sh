@@ -7,13 +7,12 @@ export BUILD_UI=1
 # build keyfender container
 docker/build-all-in-one.sh
 
-# run keyfender on port 4433
-docker run -i --rm --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN -p4433:4433 keyfender/keyfender --irmin http://irmin:8081 &
+docker network create -d bridge --subnet 10.99.99.0/24 --gateway 10.99.99.1 dockernet
+docker run -i --rm --net dockernet --ip 10.99.99.3 --name irmin -v $OPAM_DIR:/home/opam/.opam keyfender_buildbase irmin init -a http://0.0.0.0:8081 -d --verbosity=debug -s mem 2>&1 | sed "s/^/<irmin> /" &
 
-docker run -i --name irmin-build -v $OPAM_DIR:/home/opam/.opam keyfender_buildbase /bin/sh -c "opam install irmin-unix"
-docker commit irmin-build irmin-img
-docker run -i --rm --name irmin irmin-img irmin init -a http://0.0.0.0:8081 -d --verbosity=debug -s mem &
+# run keyfender on port 4433
+docker run -i --rm -p4433:4433 --net dockernet --ip 10.99.99.2 keyfender/keyfender --irmin http://10.99.99.3:8081 2>&1 | sed "s/^/<keyfender> /" &
 
 # functional tests
 cd tests/end-to-end/
-sbt test
+sbt test 2>&1 | sed "s/^/<sbt> /"

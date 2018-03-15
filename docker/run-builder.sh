@@ -3,7 +3,7 @@
 CMD=$@
 BUILDER_OUT=${BUILDER_OUT:-/tmp/keyfender_builder_out}
 
-DIR=$(dirname "$(readlink -f "$0")")
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $DIR/env-setup.rc
 
 docker rm -f keyfender_tmp >/dev/null 2>&1 && true
