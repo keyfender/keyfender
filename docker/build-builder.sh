@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 
-DIR=$(dirname "$(readlink -f "$0")")
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $DIR/env-setup.rc
 
 OCAML_VERSION=${OCAML_VERSION:-4.04.2}
