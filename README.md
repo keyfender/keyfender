@@ -29,6 +29,10 @@ socket:
 $ docker run --rm -ti -p4433:4433 keyfender/keyfender
 ```
 
+## Prerequisites
+
+[Install MirageOS](https://mirage.io/wiki/install).
+
 ## Building
 
 On Unix, do:
