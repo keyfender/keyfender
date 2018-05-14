@@ -59,7 +59,7 @@ module Config = struct
     with Not_found -> None
 end
 
-module Dispatch (H:Cohttp_lwt.S.Server)(KR:Keyring.S)(DATE:Wm_util.Date_sig) = struct
+module Dispatch (H:Cohttp_lwt.S.Server)(KR:Keyring.S)(Clock:Webmachine.CLOCK) = struct
   let jsend_success data =
     let l = match data with
       | `Null -> []
@@ -90,7 +90,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:Keyring.S)(DATE:Wm_util.Date_sig) = s
    * access request-related information. *)
   module Wm = struct
     module Rd = Webmachine.Rd
-    include Webmachine.Make(H.IO)(DATE)
+    include Webmachine.Make(H.IO)(Clock)
   end
 
   let has_valid_credentials ~admin rd =
