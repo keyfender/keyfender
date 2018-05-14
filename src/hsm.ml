@@ -127,10 +127,14 @@ module HTTPS
       )
     in
     let module KR = Keyring.Make(KV) in
-    let module Clock = struct
-      let now = fun () -> Ptime.v @@ Pclock.now_d_ps clock
+    let module WmClock = struct
+      let now = fun () ->
+        let int_of_d_ps (d, ps) =
+          d * 86_400 + Int64.(to_int (div ps 1_000_000_000_000L))
+        in
+        int_of_d_ps @@ Pclock.now_d_ps clock
     end in
-    let module D = Dispatch(DATA)(Http)(KR)(Clock) in
+    let module D = Dispatch(DATA)(Http)(KR)(WmClock) in
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
