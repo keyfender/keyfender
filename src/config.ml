@@ -2,9 +2,8 @@ open Mirage
 
 let stack = generic_stackv4 default_network
 let data = generic_kv_ro "htdocs"
-(* set ~tls to false to get a plain-http server *)
 
-let res_dns = resolver_dns stack
+(* set ~tls to false to get a plain-http server *)
 let con = conduit_direct ~tls:true stack
 let https_srv = Mirage.http_server @@ con
 
@@ -25,9 +24,14 @@ let admin_password =
     Arg.(opt ~stage:`Both string "" doc))
 
 let irmin_url =
-  let doc = Key.Arg.info ~doc:"URL of remote Irmin server" ["irmin-url"] in
+  let doc = Key.Arg.info ~doc:"URL of remote Irmin server." ["irmin-url"] in
   Key.abstract Key.(create "irmin_url"
     Arg.(opt ~stage:`Both string "" doc))
+
+let nameserver =
+  let doc = Key.Arg.info ~doc:"Address of DNS server." ["nameserver"] in
+  Key.abstract Key.(create "nameserver"
+    Arg.(opt ~stage:`Both string "8.8.8.8" doc))
 
 let main =
   let packages = [
@@ -39,12 +43,12 @@ let main =
     package "irmin-http";
     package "ppx_sexp_conv";
   ] in
-  let keys = [ http_port; https_port; admin_password; irmin_url ] in
+  let keys = [ http_port; https_port; admin_password; irmin_url; nameserver ] in
   foreign
     ~packages ~keys
-    "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> resolver @-> conduit
+    "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> stackv4 @-> conduit
       @-> job)
 
 let () =
   register "keyfender" [main $ default_posix_clock $ data $ certs $ https_srv $
-    res_dns $ con]
+    stack $ con]

@@ -94,7 +94,7 @@ module HTTPS
     (DATA: Mirage_types_lwt.KV_RO)
     (CERTS: Mirage_types_lwt.KV_RO)
     (Http: HTTP)
-    (RES: Resolver_lwt.S)
+    (Stack: Mirage_types_lwt.STACKV4)
     (CON: Conduit_mirage.S)
 = struct
 
@@ -105,7 +105,13 @@ module HTTPS
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start clock data certs http res_dns con =
+  let start clock data certs http stack con =
+    let module Res = Resolver_mirage.Make_with_stack(OS.Time)(Stack) in
+    let nameserver = match Ipaddr.V4.of_string @@ Key_gen.nameserver () with
+      | None -> Ipaddr.V4.make 8 8 8 8
+      | Some ip -> ip
+    in
+    let res_dns = Res.R.init ~ns:nameserver ~stack:stack () in
     let module Client =
     struct
       include Cohttp_mirage.Client
