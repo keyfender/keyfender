@@ -5,7 +5,6 @@ let data = generic_kv_ro "htdocs"
 
 (* set ~tls to false to get a plain-http server *)
 let con = conduit_direct ~tls:true stack
-let https_srv = Mirage.http_server @@ con
 
 let http_port =
   let doc = Key.Arg.info ~doc:"Listening HTTP port." ["http"] in
@@ -35,6 +34,7 @@ let nameserver =
 
 let main =
   let packages = [
+    package "cohttp-mirage";
     package "uri";
     package "magic-mime";
     package "yojson";
@@ -46,9 +46,9 @@ let main =
   let keys = [ http_port; https_port; admin_password; irmin_url; nameserver ] in
   foreign
     ~packages ~keys
-    "Hsm.HTTPS" (pclock @-> kv_ro @-> kv_ro @-> http @-> stackv4 @-> conduit
+    "Hsm.Main" (pclock @-> kv_ro @-> kv_ro @-> stackv4 @-> conduit
       @-> job)
 
 let () =
-  register "keyfender" [main $ default_posix_clock $ data $ certs $ https_srv $
+  register "keyfender" [main $ default_posix_clock $ data $ certs $
     stack $ con]

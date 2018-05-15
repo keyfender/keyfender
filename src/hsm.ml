@@ -89,23 +89,23 @@ module Dispatch
 
 end
 
-module HTTPS
+module Main
     (Pclock: Mirage_types.PCLOCK)
     (DATA: Mirage_types_lwt.KV_RO)
     (CERTS: Mirage_types_lwt.KV_RO)
-    (Http: HTTP)
     (Stack: Mirage_types_lwt.STACKV4)
     (CON: Conduit_mirage.S)
 = struct
 
   module X509 = Tls_mirage.X509(CERTS)(Pclock)
+  module Http_srv = Cohttp_mirage.Server_with_conduit
 
   let tls_init kv =
     X509.certificate kv `Default >>= fun cert ->
     let conf = Tls.Config.server ~certificates:(`Single cert) () in
     Lwt.return conf
 
-  let start clock data certs http stack con =
+  let start clock data certs stack con =
     let module Res = Resolver_mirage.Make_with_stack(OS.Time)(Stack) in
     let nameserver = match Ipaddr.V4.of_string @@ Key_gen.nameserver () with
       | None -> Ipaddr.V4.make 8 8 8 8
@@ -140,7 +140,8 @@ module HTTPS
         in
         int_of_d_ps @@ Pclock.now_d_ps clock
     end in
-    let module D = Dispatch(DATA)(Http)(KR)(WmClock) in
+    let module D = Dispatch(DATA)(Http_srv)(KR)(WmClock) in
+    Cohttp_mirage.Server_with_conduit.connect con >>= fun http_srv ->
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in
     let tls = `TLS (cfg, `TCP https_port) in
@@ -150,12 +151,12 @@ module HTTPS
     KR.create storage_config >>= fun keyring ->
     let https =
       Https_log.info (fun f -> f "listening on %d/TCP" https_port);
-      http tls @@ D.serve (D.dispatcher data keyring)
+      http_srv tls @@ D.serve (D.dispatcher data keyring)
     in
     let http =
       Http_log.info (fun f -> f "listening on %d/TCP" http_port);
       (*http tcp @@ D.serve (D.redirect https_port)*)
-      http tcp @@ D.serve (D.dispatcher data keyring)
+      http_srv tcp @@ D.serve (D.dispatcher data keyring)
     in
     Lwt.join [ https; http ]
 
