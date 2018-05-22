@@ -29,11 +29,8 @@ opam update
 # remove all pinnings from cache
 opam pin -n remove $(opam pin list -s)
 
-# webmachine 0.4.0 requires calendar which is not compatible with
-# mirage
-# https://github.com/inhabitedtype/ocaml-webmachine/issues/73
-opam pin -n add webmachine https://github.com/ansiwen/ocaml-webmachine.git#remove-calendar
-opam pin -n add irmin-http https://github.com/ansiwen/irmin.git#new-webmachine
+# latest irmin release still depends on older webmachine
+opam pin -n add irmin-http https://github.com/mirage/irmin.git
 
 # https://github.com/mirleft/ocaml-nocrypto/issues/143
 opam pin -n add -k version ppx_sexp_conv v0.10.0

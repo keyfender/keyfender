@@ -35,9 +35,7 @@ $ docker run --rm -ti -p4433:4433 keyfender/keyfender
 
 Install the following dependencies:
 ```
-opam pin add webmachine https://github.com/ansiwen/ocaml-webmachine.git#remove-calendar
-opam pin add irmin-http https://github.com/ansiwen/irmin.git#new-webmachine
-opam pin add -k version ppx_sexp_conv v0.10.0
+opam pin add irmin-http https://github.com/mirage/irmin.git
 ```
 
 ## Building

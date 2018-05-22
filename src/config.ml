@@ -38,7 +38,7 @@ let main =
     package "uri";
     package "magic-mime";
     package "yojson";
-    package "webmachine";
+    package ~min:"0.6.0" "webmachine";
     package "irmin-mem";
     package "irmin-http";
     package "ppx_sexp_conv";
