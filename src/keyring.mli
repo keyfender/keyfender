@@ -1,3 +1,1 @@
-module type S = S.Keyring
-
-module Make (KV: Irmin.KV_MAKER) : S
+module Make (KV: Irmin.KV_MAKER)(Enc: S.Encryptor) : S.Keyring

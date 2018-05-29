@@ -1,10 +1,9 @@
 open Lwt.Infix
 open Sexplib.Std
 
-module type S = S.Keyring
-
 module Make
     (KV: Irmin.KV_MAKER)
+    (Enc: S.Encryptor)
 = struct
 
 exception Failure_exn of Yojson.Basic.json
@@ -44,7 +43,7 @@ module Padding = struct
     | PSS of Nocrypto.Hash.hash
 end
 
-module Storage = KV(Contents.Sexp(Priv))
+module Storage = KV(Contents.EncryptedSexp(Priv)(Enc))
 type storage = Storage.t
 let info _ = Irmin.Info.none
 

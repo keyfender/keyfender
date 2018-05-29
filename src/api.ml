@@ -59,7 +59,7 @@ module Config = struct
     with Not_found -> None
 end
 
-module Dispatch (H:Cohttp_lwt.S.Server)(KR:Keyring.S)(Clock:Webmachine.CLOCK) = struct
+module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = struct
   let jsend_success data =
     let l = match data with
       | `Null -> []

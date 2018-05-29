@@ -1,7 +1,7 @@
 open Lwt.Infix
 
 (** Common signature for http and https. *)
-module type HTTP = Cohttp_lwt.S.Server
+module type HTTP_SERVER = Cohttp_lwt.S.Server
 
 (* Logging *)
 let https_src = Logs.Src.create "https" ~doc:"HTTPS server"
@@ -12,12 +12,12 @@ module Http_log = (val Logs.src_log http_src : Logs.LOG)
 
 module Dispatch
     (FS: Mirage_types_lwt.KV_RO)
-    (S: HTTP)
-    (KR: Keyring.S)
+    (Serv: HTTP_SERVER)
+    (KR: S.Keyring)
     (Clock: Webmachine.CLOCK)
 = struct
 
-  module API = Api.Dispatch(S)(KR)(Clock)
+  module API = Api.Dispatch(Serv)(KR)(Clock)
 
   let failf fmt = Fmt.kstrf Lwt.fail_with fmt
 
@@ -52,9 +52,9 @@ module Dispatch
       Lwt.catch
         (fun () ->
            read_whole_file fs path >>= fun body ->
-           S.respond_string ~status:`OK ~body ~headers ())
+           Serv.respond_string ~status:`OK ~body ~headers ())
         (fun _exn ->
-           S.respond_not_found ())
+           Serv.respond_not_found ())
 
   let dispatcher fs keyring request body =
     let uri = Cohttp.Request.uri request in
@@ -72,7 +72,7 @@ module Dispatch
                       (Uri.to_string uri) (Uri.to_string new_uri)
                   );
     let headers = Cohttp.Header.init_with "location" (Uri.to_string new_uri) in
-    S.respond ~headers ~status:`Moved_permanently ~body:`Empty ()
+    Serv.respond ~headers ~status:`Moved_permanently ~body:`Empty ()
 
   let serve dispatch =
     let callback (_, cid) request body =
@@ -85,19 +85,19 @@ module Dispatch
       let cid = Cohttp.Connection.to_string cid in
       Https_log.info (fun f -> f "[%s] closing" cid);
     in
-    S.make ~conn_closed ~callback ()
+    Serv.make ~conn_closed ~callback ()
 
 end
 
 module Main
     (Pclock: Mirage_types.PCLOCK)
-    (DATA: Mirage_types_lwt.KV_RO)
-    (CERTS: Mirage_types_lwt.KV_RO)
+    (Data: Mirage_types_lwt.KV_RO)
+    (Certs: Mirage_types_lwt.KV_RO)
     (Stack: Mirage_types_lwt.STACKV4)
-    (CON: Conduit_mirage.S)
+    (Con: Conduit_mirage.S)
 = struct
 
-  module X509 = Tls_mirage.X509(CERTS)(Pclock)
+  module X509 = Tls_mirage.X509(Certs)(Pclock)
   module Http_srv = Cohttp_mirage.Server_with_conduit
 
   let tls_init kv =
@@ -132,7 +132,15 @@ module Main
         Irmin_http.config (Uri.of_string url)
       )
     in
-    let module KR = Keyring.Make(KV) in
+    let masterkey = Cstruct.of_hex (Key_gen.masterkey ()) in
+    let (module Enc : S.Encryptor) = match (Cstruct.len masterkey) with 
+      | 0 ->
+        Logs.warn (fun f -> f "*** No masterkey provided! Storage is unencrypted! ***");
+        (module Encryptor.Null : S.Encryptor)
+      | _ ->
+        (module Encryptor.Make(struct let key = masterkey end) : S.Encryptor)
+    in
+    let module KR = Keyring.Make(KV)(Enc) in
     let module WmClock = struct
       let now = fun () ->
         let int_of_d_ps (d, ps) =
@@ -140,7 +148,7 @@ module Main
         in
         int_of_d_ps @@ Pclock.now_d_ps clock
     end in
-    let module D = Dispatch(DATA)(Http_srv)(KR)(WmClock) in
+    let module D = Dispatch(Data)(Http_srv)(KR)(WmClock) in
     Cohttp_mirage.Server_with_conduit.connect con >>= fun http_srv ->
     tls_init certs >>= fun cfg ->
     let https_port = Key_gen.https_port () in

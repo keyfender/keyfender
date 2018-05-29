@@ -8,6 +8,7 @@ echo "##### Keyfender container setup #####"
 [ -n "$KEYFENDER_HTTPS_PORT" ] && ARGS="$ARGS --https=$KEYFENDER_HTTPS_PORT"
 [ -n "$KEYFENDER_PASSWORD" ] && ARGS="$ARGS --password=$KEYFENDER_PASSWORD"
 [ -n "$KEYFENDER_IRMIN_URL" ] && ARGS="$ARGS --irmin-url=$KEYFENDER_IRMIN_URL"
+[ -n "$KEYFENDER_MASTERKEY" ] && ARGS="$ARGS --masterkey=$KEYFENDER_MASTERKEY"
 
 NS=${KEYFENDER_NS:-$(grep ^nameserver /etc/resolv.conf | head -1 | awk '{print $2}')}
 echo "Nameserver: $NS"
