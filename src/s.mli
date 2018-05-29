@@ -1,7 +1,16 @@
-module type Sexp = sig
+module type SexpConvertable = sig
   type t
   val t_of_sexp : Sexplib.Sexp.t -> t
   val sexp_of_t : t -> Sexplib.Sexp.t
+end
+
+module type Encryptor = sig
+  val encrypt : string -> string
+  val decrypt : string -> string
+end
+
+module type EncKey = sig
+  val key : Cstruct.t
 end
 
 module type Keyring = sig

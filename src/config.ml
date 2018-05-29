@@ -32,6 +32,12 @@ let nameserver =
   Key.abstract Key.(create "nameserver"
     Arg.(opt ~stage:`Both string "8.8.8.8" doc))
 
+let masterkey =
+  let doc = Key.Arg.info ~doc:"Masterkey for AES storage encryption \
+    (16, 24 or 32 byte hexcode)." ["masterkey"] in
+  Key.abstract Key.(create "masterkey"
+    Arg.(opt ~stage:`Both string "" doc))
+
 let main =
   let packages = [
     package "cohttp-mirage";
@@ -43,7 +49,8 @@ let main =
     package "irmin-http";
     package "ppx_sexp_conv";
   ] in
-  let keys = [ http_port; https_port; admin_password; irmin_url; nameserver ] in
+  let keys = [ http_port; https_port; admin_password; irmin_url; nameserver;
+    masterkey ] in
   foreign
     ~packages ~keys
     "Hsm.Main" (pclock @-> kv_ro @-> kv_ro @-> stackv4 @-> conduit
