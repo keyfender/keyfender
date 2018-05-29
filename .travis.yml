@@ -10,12 +10,15 @@ cache:
     - $HOME/.sbt
     - $HOME/.ivy2
     - $HOME/.apk-cache
+branches:
+  only:
+  - master
 before_cache:
   - rm -rfv $HOME/.opam/log ;
     if [ "$TRAVIS_TEST_RESULT" = "0" -a "$TRAVIS_BRANCH" = "master" ]; then
     LAST_UI_SHA=$( cat $HOME/.apk-cache/.last_ui_sha );
     UI_SHA=$( curl -s -H "Accept:application/vnd.github.v3.sha" https://api.github.com/repos/keyfender/keyfender-ui/commits/master );
-    if [ "$TRAVIS_EVENT_TYPE" != "cron" -o "$UI_SHA" != "$LAST_UI_SHA" ]; then
+    if [ "$TRAVIS_EVENT_TYPE" = "push" -o "$UI_SHA" != "$LAST_UI_SHA" ]; then
     echo -n $UI_SHA > $HOME/.apk-cache/.last_ui_sha ;
     docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
     export REPO=keyfender/keyfender;
