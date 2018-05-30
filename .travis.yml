@@ -32,7 +32,7 @@ script: bash -ex .travis-script.sh
 notifications:
   webhooks:
     urls:
-    - "https://scalar.vector.im/api/neb/services/hooks/dHJhdmlzLWNpLyU0MHN2ZW4lM0FhNm4uZGUvJTIxQm1vQ2JOWUpVU0VLYnBKUWtPJTNBYTZuLmRl"
+    - "https://scalar.vector.im/api/neb/services/hooks/dHJhdmlzLWNpLyU0MGFuc2l3ZW4lM0FtYXRyaXgub3JnLyUyMUJtb0NiTllKVVNFS2JwSlFrTyUzQWE2bi5kZQ"
     on_success: change  # always|never|change
     on_failure: always
     on_start: never
