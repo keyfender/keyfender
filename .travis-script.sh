@@ -16,10 +16,9 @@ docker run -i --rm --net dockernet --ip 10.99.99.3 --name irmin \
   | sed "s/^/<irmin> /" &
 
 # run keyfender on port 4433
-docker run -i --rm -p4433:4433 --device=/dev/net/tun:/dev/net/tun \
-  --cap-add=NET_ADMIN --net dockernet --ip 10.99.99.2 keyfender/keyfender \
-  --masterkey 000102030405060708090A0B0C0D0E0F --irmin http://10.99.99.3:8081 \
-  2>&1 | sed "s/^/<keyfender> /" &
+docker run -i --rm -p4433:4433 --privileged --net dockernet --ip 10.99.99.2 \
+  keyfender/keyfender --masterkey 000102030405060708090A0B0C0D0E0F \
+  --irmin http://10.99.99.3:8081 2>&1 | sed "s/^/<keyfender> /" &
 
 # functional tests
 cd tests/end-to-end/

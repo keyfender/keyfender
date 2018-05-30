@@ -1,10 +1,15 @@
 module GCM = Nocrypto.Cipher_block.AES.GCM
 module Rng = Nocrypto.Rng
+module YB = Yojson.Basic
 
-type encData = {
-  iv: Cstruct.t;
-  data: Cstruct.t;
-} [@@deriving sexp]
+let cs_of_json_val json key =
+  YB.Util.member key json
+  |> YB.Util.to_string
+  |> B64.decode ~alphabet:B64.uri_safe_alphabet
+  |> Cstruct.of_string
+
+let b64_of_cs cs = Cstruct.to_string cs
+  |> B64.encode ~alphabet:B64.uri_safe_alphabet
 
 module Make
   (K : S.EncKey)
@@ -13,16 +18,20 @@ struct
   let key = GCM.of_secret K.key
 
   let decrypt s =
-    let { iv ; data } = (Sexplib.Sexp.of_string s |> encData_of_sexp) in
+    let json = YB.from_string s in
+    let iv = cs_of_json_val json "iv" in
+    let data = cs_of_json_val json "data" in
     let res = GCM.decrypt ~key ~iv data in
-    let plain = res.GCM.message in
-    Cstruct.to_string plain
+    Cstruct.to_string res.GCM.message
 
   let encrypt s =
     let iv = Rng.generate 12 in
     let res = GCM.encrypt ~key ~iv (Cstruct.of_string s) in
-    let data = res.GCM.message in
-    sexp_of_encData { iv; data } |> Sexplib.Sexp.to_string
+    let json = (`Assoc [
+      ("iv", `String (b64_of_cs iv));
+      ("data", `String (b64_of_cs res.GCM.message))
+    ]) in
+    YB.to_string json
 end
 
 module Null : S.Encryptor = struct
