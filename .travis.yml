@@ -10,9 +10,6 @@ cache:
     - $HOME/.sbt
     - $HOME/.ivy2
     - $HOME/.apk-cache
-branches:
-  only:
-  - master
 before_cache:
   - rm -rfv $HOME/.opam/log ;
     if [ "$TRAVIS_TEST_RESULT" = "0" -a "$TRAVIS_BRANCH" = "master" ]; then
