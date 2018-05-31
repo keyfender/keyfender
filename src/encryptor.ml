@@ -20,15 +20,19 @@ struct
   let decrypt s =
     let json = YB.from_string s in
     let iv = cs_of_json_val json "iv" in
+    let tag = cs_of_json_val json "tag" in
     let data = cs_of_json_val json "data" in
     let res = GCM.decrypt ~key ~iv data in
-    Cstruct.to_string res.GCM.message
+    match (Cstruct.equal tag res.GCM.tag) with
+    | false -> raise (Failure "AES/GCM authentication failed")
+    | true -> Cstruct.to_string res.GCM.message
 
   let encrypt s =
     let iv = Rng.generate 12 in
     let res = GCM.encrypt ~key ~iv (Cstruct.of_string s) in
     let json = (`Assoc [
       ("iv", `String (b64_of_cs iv));
+      ("tag", `String (b64_of_cs res.GCM.tag));
       ("data", `String (b64_of_cs res.GCM.message))
     ]) in
     YB.to_string json
