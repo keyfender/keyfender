@@ -13,6 +13,8 @@ echo "##### Keyfender container setup #####"
 NS=${KEYFENDER_NS:-$(grep ^nameserver /etc/resolv.conf | head -1 | awk '{print $2}')}
 echo "Nameserver: $NS"
 
+KEYFENDER_MEM=${KEYFENDER_MEM:-32}
+
 export MIRAGE_LOGS=${MIRAGE_LOGS:-debug}
 echo "Log level: $MIRAGE_LOGS"
 
@@ -32,7 +34,7 @@ if [ -e /dev/net/tun ] ; then
 
   if [ -e /dev/kvm ] ; then
     echo "##### Starting keyfender as kvm instance #####"
-    /ukvm-bin --net=tap0 /keyfender.ukvm --ipv4=$IP --ipv4-gateway=$GW --nameserver=$NS --logs=$MIRAGE_LOGS $ARGS
+    /ukvm-bin --net=tap0 --mem=$KEYFENDER_MEM /keyfender.ukvm --ipv4=$IP --ipv4-gateway=$GW --nameserver=$NS --logs=$MIRAGE_LOGS $ARGS
   else
     echo "##### Starting keyfender with direct network #####"
     /keyfender.direct --interface tap0 --ipv4 $IP --ipv4-gateway=$GW --nameserver=$NS $ARGS
