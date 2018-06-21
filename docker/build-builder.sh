@@ -3,7 +3,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $DIR/env-setup.rc
 
-OCAML_VERSION=${OCAML_VERSION:-4.04.2}
+OCAML_VERSION=${OCAML_VERSION:-4.06.1}
 
 # Build the buildbase
 # Since Dockerfile builds don't allow volume mounts, but we want to use cache

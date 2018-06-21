@@ -32,9 +32,6 @@ opam pin -n remove $(opam pin list -s)
 # latest irmin release still depends on older webmachine
 opam pin -n add irmin-http https://github.com/mirage/irmin.git
 
-# https://github.com/mirleft/ocaml-nocrypto/issues/143
-opam pin -n add -k version ppx_sexp_conv v0.10.0
-
 opam upgrade
 
 # to use the builder image also as a irmin server runner for tests
