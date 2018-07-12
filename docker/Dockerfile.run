@@ -1,7 +1,10 @@
 FROM alpine
 
 EXPOSE 4433 8080
-RUN apk add --no-cache --purge -U gmp && rm -rf /var/cache/apk/*
+RUN set -ex ;\
+    apk add --no-cache --purge -U gmp ;\
+    adduser -D keyfender ;\
+    rm -rf /var/cache/apk/*
 ADD container-scripts/start.sh /
 ADD build/. /
 CMD []
