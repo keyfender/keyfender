@@ -29,8 +29,8 @@ opam update
 # remove all pinnings from cache
 opam pin -n remove $(opam pin list -s)
 
-# latest irmin release still depends on older webmachine
-opam pin -n add irmin-http https://github.com/mirage/irmin.git
+# latest working irmin commit (needed for newer webmachine)
+opam pin -n add irmin-http https://github.com/mirage/irmin.git#2cab261dbcaa441c506e20b3e1663c3b7a45f2e6
 
 opam upgrade
 
