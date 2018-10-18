@@ -3,7 +3,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $DIR/env-setup.rc
 
-OCAML_VERSION=${OCAML_VERSION:-4.06.1}
+OCAML_VERSION=${OCAML_VERSION:-4.07.0}
 
 # Build the buildbase
 # Since Dockerfile builds don't allow volume mounts, but we want to use cache
@@ -19,7 +19,7 @@ docker run --name keyfender_tmp \
 docker commit \
   -c 'USER opam' \
   -c 'WORKDIR /src' \
-  -c 'ENTRYPOINT [ "opam", "config", "exec", "--" ]' \
+  -c 'ENTRYPOINT [ "opam", "config", "exec", "--", "sh", "-c"]' \
   -c 'ENV OPAMYES=1 FLAGS=-vv DEPEXT=' \
   -c 'CMD [ "sh" ]' \
   keyfender_tmp keyfender_buildbase

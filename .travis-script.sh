@@ -11,8 +11,8 @@ docker network create -d bridge --subnet 10.99.99.0/24 --gateway 10.99.99.1 \
   dockernet
 
 docker run -i --rm --net dockernet --ip 10.99.99.3 --name irmin \
-  -v $OPAM_DIR:/home/opam/.opam keyfender_buildbase irmin init \
-  -a http://0.0.0.0:8081 -d --verbosity=info -s mem 2>&1 \
+  -v $OPAM_DIR:/home/opam/.opam keyfender_buildbase "irmin init \
+  -a http://0.0.0.0:8081 -d --verbosity=info -s mem" 2>&1 \
   | sed "s/^/<irmin> /" &
 
 # run keyfender on port 4433
@@ -22,4 +22,4 @@ docker run -i --rm -p4433:4433 --privileged --net dockernet --ip 10.99.99.2 \
 
 # functional tests
 cd tests/end-to-end/
-sbt test 2>&1 | sed "s/^/<sbt> /"
+sbt test 2>&1
