@@ -45,6 +45,7 @@ Makefile.*
 *.xl.in
 *.opam
 *.ukvm
+*.hvt
 *.virtio
 static*.ml
 static*.mli
@@ -55,3 +56,4 @@ keyfender
 make-fat*-image.sh
 key_gen.ml
 ukvm-bin
+solo5-hvt
