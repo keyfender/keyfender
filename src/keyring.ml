@@ -1,18 +1,7 @@
 open Lwt.Infix
 open Sexplib.Std
 
-module Make
-    (KV: Irmin.KV_MAKER)
-    (Enc: S.Encryptor)
-= struct
-
-exception Failure_exn of Yojson.Basic.json
-
-type 'a result =
-  | Ok of 'a
-  | Failure of Yojson.Basic.json
-
-module YB = Yojson.Basic
+module Make (KV_Maker: S.KV_Maker) = struct
 
 module Priv = struct
   type data =
@@ -23,6 +12,14 @@ module Priv = struct
     data: data;
   } [@@deriving sexp]
 end
+
+exception Failure_exn of Yojson.Basic.json
+
+type 'a result =
+  | Ok of 'a
+  | Failure of Yojson.Basic.json
+
+module YB = Yojson.Basic
 
 module Pub = struct
   type data =
@@ -42,10 +39,6 @@ module Padding = struct
     | OAEP of Nocrypto.Hash.hash
     | PSS of Nocrypto.Hash.hash
 end
-
-module Storage = KV(Contents.EncryptedSexp(Priv)(Enc))
-type storage = Storage.t
-let info _ = Irmin.Info.none
 
 (* helper functions *)
 
@@ -141,8 +134,7 @@ let priv_of_json json =
   let data = match (algorithm, data_json, length) with
     | ("RSA", (`Assoc _ as j), None) -> rsa_priv_of_json j
     | ("RSA", `Null, Some l) -> Priv.Rsa (Nocrypto.Rsa.generate l)
-    | ("RSA", _, _)
-      -> failwith_missing ["privateKey"; "length"]
+    | ("RSA", _, _) -> failwith_missing ["privateKey"; "length"]
     | _ -> failwith_desc ("Unknown key type: " ^ algorithm)
   in
   id, { Priv.purpose; data }
@@ -151,72 +143,8 @@ let priv_of_json json =
   Cstruct.of_string s |> X509.Encoding.Pem.Private_key.of_pem_cstruct1
     |> function `RSA key -> key *)
 
-(* Database interface to Irmin *)
-module Db = struct
-  let create config =
-    Random.init @@ Nocrypto.Rng.Int.gen_bits 32;
-    Storage.Repo.v config >>= Storage.master
 
-  (* let id  = ref 0 *)
-  let rec new_id db =
-    let n = 20 in
-    let alphanum =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
-    let len = String.length alphanum in
-    let id = Bytes.create n in
-    for i=0 to pred n do
-      Bytes.set id i alphanum.[Random.int len]
-    done;
-    let id' = Bytes.to_string id in
-    Storage.mem db ["keys"; id'] >>= function
-      | true -> new_id db
-      | false -> Lwt.return id'
-
-  let get db id =
-    Storage.find db ["keys"; id]
-
-  let get_all db =
-    Storage.list db ["keys"]
-    >|= fun l ->
-    let f a e =
-      match e with
-      | (k, `Contents) -> k :: a
-      | _ -> a
-    in
-    List.fold_left f [] l
-
-  let add db id e =
-    begin
-    match id with
-      | Some id ->
-        begin Storage.mem db ["keys"; id] >>= function
-          | true -> failwith_desc "key id already exists"
-          | false -> Lwt.return id
-        end
-      | None -> new_id db
-    end
-    >>= fun id ->
-    Storage.set db ~info:(info "Adding key") ["keys"; id] e
-    >>= fun () ->
-    Lwt.return id
-
-  let put db id e =
-    Storage.mem db ["keys"; id] >>= function
-      | false -> Lwt.return false
-      | true ->
-    Storage.set db ~info:(info "Updating key") ["keys"; id] e
-    >>= fun () ->
-    Lwt.return true
-
-  let delete db id =
-    Storage.mem db ["keys"; id] >>= function
-      | false -> Lwt.return false
-      | true ->
-    Storage.remove db ~info:(info "Updating key") ["keys"; id]
-    >>= fun _ ->
-    Lwt.return true
-end
-
+module Db = KV_Maker(Priv)
 
 (******************** public functions ********************)
 
@@ -241,13 +169,11 @@ let json_of_pub id { Pub.purpose; data } =
   in
   `Assoc (json_hd @ json_data)
 
-let create config = Db.create config
-
-let add ks ~key =
+let add ~key =
   Lwt.catch (fun () ->
     Lwt.wrap1 priv_of_json key
     >>= (fun (id, k) ->
-      Db.add ks id k
+      Db.add id k
     )
     >|= (fun x ->
       Ok x
@@ -257,11 +183,11 @@ let add ks ~key =
     | e -> Lwt.fail e
   )
 
-let put ks ~id ~key =
+let put ~id ~key =
   Lwt.catch (fun () ->
     Lwt.wrap1 priv_of_json key
     >>= (fun (_, k) ->
-      Db.put ks id k
+      Db.put id k
     )
     >|= (fun x ->
       Ok x
@@ -271,16 +197,16 @@ let put ks ~id ~key =
     | e -> Lwt.fail e
   )
 
-let del ks ~id = Db.delete ks id
+let del ~id = Db.delete id
 
-let get ks ~id = Db.get ks id >|= function
+let get ~id = Db.get id >|= function
   | None -> None
   | Some k -> Some (pub_of_priv k)
 
-let get_all ks = Db.get_all ks
+let get_all = Db.get_all
 
-let decrypt ks ~id ~padding ~data =
-  Db.get ks id
+let decrypt ~id ~padding ~data =
+  Db.get id
   >>= Lwt.wrap1 rem_opt
   >>= Lwt.wrap1 @@ fun key ->
   try
@@ -321,8 +247,8 @@ let decrypt ks ~id ~padding ~data =
     | Failure_exn json -> Failure json
 
 
-let sign ks ~id ~padding ~data =
-  Db.get ks id
+let sign ~id ~padding ~data =
+  Db.get id
   >>= Lwt.wrap1 rem_opt
   >>= Lwt.wrap1 @@ fun key ->
   try

@@ -56,10 +56,10 @@ module Dispatch
         (fun _exn ->
            Serv.respond_not_found ())
 
-  let dispatcher fs keyring request body =
+  let dispatcher fs request body =
     let uri = Cohttp.Request.uri request in
     if starts_with (Uri.path uri) "/api/" then
-      API.dispatcher keyring request body
+      API.dispatcher request body
     else
       dispatch_file fs uri
 
@@ -106,6 +106,14 @@ module Main
     Lwt.return conf
 
   let start clock data certs stack con =
+    let masterkey = Cstruct.of_hex (Key_gen.masterkey ()) in
+    let (module Enc) = match (Cstruct.len masterkey) with
+      | 0 ->
+        Logs.warn (fun f -> f "*** No masterkey provided! Storage is unencrypted! ***");
+        (module Encryptor.Null : S.Encryptor)
+      | _ ->
+        (module Encryptor.Make(struct let key = masterkey end) : S.Encryptor)
+    in
     let module Res = Resolver_mirage.Make_with_stack(OS.Time)(Stack) in
     let nameserver = match Ipaddr.V4.of_string @@ Key_gen.nameserver () with
       | None -> Ipaddr.V4.make 8 8 8 8
@@ -119,28 +127,19 @@ module Main
     end
     in
     let irmin_url = Key_gen.irmin_url () in
-    let (
-      (module KV: Irmin.KV_MAKER),
-      storage_config
-    ) = match irmin_url with
-      | "" -> (
-        (module Irmin_mem.KV : Irmin.KV_MAKER),
-        Irmin_mem.config ()
-      )
-      | url -> (
-        (module Irmin_http.KV(Client) : Irmin.KV_MAKER),
-        Irmin_http.config (Uri.of_string url)
-      )
+    let (module KV_Maker) = match irmin_url with
+      | "" -> (module Irmin_db.Make
+        (Irmin_mem.KV)
+        (Enc)
+        (struct let config = (Irmin_mem.config ()) end)
+        : S.KV_Maker)
+      | url -> (module Irmin_db.Make
+        (Irmin_http.KV(Client))
+        (Enc)
+        (struct let config = (Irmin_http.config (Uri.of_string url)) end)
+        : S.KV_Maker)
     in
-    let masterkey = Cstruct.of_hex (Key_gen.masterkey ()) in
-    let (module Enc : S.Encryptor) = match (Cstruct.len masterkey) with 
-      | 0 ->
-        Logs.warn (fun f -> f "*** No masterkey provided! Storage is unencrypted! ***");
-        (module Encryptor.Null : S.Encryptor)
-      | _ ->
-        (module Encryptor.Make(struct let key = masterkey end) : S.Encryptor)
-    in
-    let module KR = Keyring.Make(KV)(Enc) in
+    let module KR = Keyring.Make(KV_Maker) in
     let module WmClock = struct
       let now = fun () ->
         let int_of_d_ps (d, ps) =
@@ -155,16 +154,14 @@ module Main
     let tls = `TLS (cfg, `TCP https_port) in
     let http_port = Key_gen.http_port () in
     let tcp = `TCP http_port in
-    (* create the database *)
-    KR.create storage_config >>= fun keyring ->
     let https =
       Https_log.info (fun f -> f "listening on %d/TCP" https_port);
-      http_srv tls @@ D.serve (D.dispatcher data keyring)
+      http_srv tls @@ D.serve (D.dispatcher data)
     in
     let http =
       Http_log.info (fun f -> f "listening on %d/TCP" http_port);
       (*http tcp @@ D.serve (D.redirect https_port)*)
-      http_srv tcp @@ D.serve (D.dispatcher data keyring)
+      http_srv tcp @@ D.serve (D.dispatcher data)
     in
     Lwt.join [ https; http ]
 

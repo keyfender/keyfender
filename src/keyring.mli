@@ -1,1 +1,3 @@
-module Make (KV: Irmin.KV_MAKER)(Enc: S.Encryptor) : S.Keyring
+(* Keyring implementation taking a KV constructor *)
+
+module Make (KV_Maker: S.KV_Maker) : S.Keyring

@@ -123,11 +123,11 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
   (** A resource for querying all the keys in the database via GET and creating
       a new key via POST. Check the [Location] header of a successful POST
       response for the URI of the key. *)
-  class keys keyring = object(self)
+  class keys = object(self)
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_json rd =
-      KR.get_all keyring
+      KR.get_all ()
       >|= List.map (fun id -> `Assoc [
           ("id", `String id);
           ("location", `String (api_prefix ^ "/keys/" ^ Uri.pct_encode id))
@@ -159,7 +159,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
       try
         Cohttp_lwt.Body.to_string rd.Wm.Rd.req_body >>= fun body ->
         let key = YB.from_string body in
-        KR.add keyring ~key
+        KR.add ~key
         >>= function
           | KR.Ok new_id ->
             let resp_body = `String (jsend_success (`Assoc [
@@ -181,7 +181,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
   (** A resource for querying an individual key in the database by id via GET,
       modifying an key via PUT, and deleting an key via DELETE. *)
-  class key keyring = object(self)
+  class key = object(self)
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private of_json rd =
@@ -190,7 +190,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
         >>= fun body ->
           let key = YB.from_string body in
           let id = self#id rd in
-          KR.put keyring ~id ~key
+          KR.put ~id ~key
         >|= function
           | KR.Ok true -> jsend_success `Null
           | KR.Ok false -> assert false (* can't happen, because of
@@ -207,7 +207,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method private to_json rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
         | None     -> assert false
         | Some key -> let json = KR.json_of_pub id key in
@@ -216,7 +216,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method private to_pem rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
         | None     -> assert false
         | Some key -> let pem = KR.pem_of_pub key in
@@ -227,7 +227,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method! resource_exists rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -252,7 +252,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method! delete_resource  rd =
       let id = self#id rd in
-      KR.del keyring ~id
+      KR.del ~id
       >>= fun deleted ->
         let resp_body =
           if deleted
@@ -267,12 +267,12 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
   (** A resource for querying an individual key in the database by id via GET,
       modifying an key via PUT, and deleting an key via DELETE. *)
-  class pem_key keyring = object(self)
+  class pem_key = object(self)
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method private to_pem rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
         | None            -> assert false
         | Some key -> let pem = KR.pem_of_pub key in
@@ -283,7 +283,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method! resource_exists rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
         | None   -> Wm.continue false rd
         | Some _ -> Wm.continue true rd
@@ -310,7 +310,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
   (** A resource for executing actions on keys via POST. Parameters for the
       actions are sent in a JSON body, and the result is returned with a JSON
       body as well. *)
-  class key_actions keyring = object(self)
+  class key_actions = object(self)
     inherit [Cohttp_lwt.Body.t] Wm.resource
 
     method! allowed_methods rd =
@@ -326,7 +326,7 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
 
     method! resource_exists rd =
       let id = self#id rd in
-      KR.get keyring ~id
+      KR.get ~id
       >>= function
       | None   -> Wm.continue false rd
       | Some _ ->
@@ -370,19 +370,19 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
       match (action, padding, hash_type) with
         | Action.Decrypt, Padding.None,   `None ->
           let padding = KR.Padding.None in
-          KR.decrypt keyring ~id ~padding
+          KR.decrypt ~id ~padding
         | Action.Decrypt, Padding.PKCS1,  `None ->
           let padding = KR.Padding.PKCS1 in
-          KR.decrypt keyring ~id ~padding
+          KR.decrypt ~id ~padding
         | Action.Sign,    Padding.PKCS1,  `None ->
           let padding = KR.Padding.PKCS1 in
-          KR.sign keyring ~id ~padding
+          KR.sign ~id ~padding
         | Action.Decrypt, Padding.OAEP,   (#Nocrypto.Hash.hash as h) ->
           let padding = KR.Padding.OAEP h in
-          KR.decrypt keyring ~id ~padding
+          KR.decrypt ~id ~padding
         | Action.Sign,    Padding.PSS,    (#Nocrypto.Hash.hash as h) ->
           let padding = KR.Padding.PSS h in
-          KR.sign keyring ~id ~padding
+          KR.sign ~id ~padding
         | _, _, #Nocrypto.Hash.hash
         | _, _, `None
           -> raise @@ Failure "invalid action resource"
@@ -509,22 +509,22 @@ module Dispatch (H:Cohttp_lwt.S.Server)(KR:S.Keyring)(Clock:Webmachine.CLOCK) = 
       Wm.continue [] rd
   end
 
-  let dispatcher keyring request body =
+  let dispatcher request body =
     let open Cohttp in
     (* Perform route dispatch. If [None] is returned, then the URI path did
     not match any of the route patterns. In this case the server should
     return a 404 [`Not_found]. *)
     let routes = [
-      (api_prefix ^ "/keys", fun () -> new keys keyring) ;
-      (api_prefix ^ "/keys/:id", fun () -> new key keyring) ;
-      (api_prefix ^ "/keys/:id/public", fun () -> new key keyring) ;
-      (api_prefix ^ "/keys/:id/public.pem", fun () -> new pem_key keyring) ;
+      (api_prefix ^ "/keys", fun () -> new keys) ;
+      (api_prefix ^ "/keys/:id", fun () -> new key) ;
+      (api_prefix ^ "/keys/:id/public", fun () -> new key) ;
+      (api_prefix ^ "/keys/:id/public.pem", fun () -> new pem_key) ;
       (api_prefix ^ "/keys/:id/actions/:action",
-        fun () -> new key_actions keyring) ;
+        fun () -> new key_actions) ;
       (api_prefix ^ "/keys/:id/actions/:padding/:action",
-        fun () -> new key_actions keyring) ;
+        fun () -> new key_actions) ;
       (api_prefix ^ "/keys/:id/actions/:padding/:hash_type/:action",
-        fun () -> new key_actions keyring) ;
+        fun () -> new key_actions) ;
         (api_prefix ^ "/system/status", fun () -> new status) ;
         (api_prefix ^ "/system/information", fun () -> new information) ;
       (api_prefix ^ "/system/passwords/:uid", fun () -> new passwords) ;
