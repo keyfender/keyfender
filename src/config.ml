@@ -27,6 +27,11 @@ let irmin_url =
   Key.abstract Key.(create "irmin_url"
     Arg.(opt ~stage:`Both string "" doc))
 
+let etcd_url =
+  let doc = Key.Arg.info ~doc:"URL of etcd server." ["etcd-url"] in
+  Key.abstract Key.(create "etcd_url"
+    Arg.(opt ~stage:`Both string "" doc))
+
 let nameserver =
   let doc = Key.Arg.info ~doc:"Address of DNS server." ["nameserver"] in
   Key.abstract Key.(create "nameserver"
@@ -48,9 +53,10 @@ let main =
     package "irmin-mem";
     package "irmin-http";
     package "ppx_sexp_conv";
+    package "atdgen";
   ] in
-  let keys = [ http_port; https_port; admin_password; irmin_url; nameserver;
-    masterkey ] in
+  let keys = [ http_port; https_port; admin_password; irmin_url; etcd_url;
+    nameserver; masterkey ] in
   foreign
     ~packages ~keys
     "Hsm.Main" (pclock @-> kv_ro @-> kv_ro @-> stackv4 @-> conduit

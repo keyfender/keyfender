@@ -120,23 +120,34 @@ module Main
       | Some ip -> ip
     in
     let res_dns = Res.R.init ~ns:nameserver ~stack:stack () in
-    let module Client =
+    let module Cohttp_Client =
     struct
       include Cohttp_mirage.Client
       let call ?ctx:_ = call ~ctx:(ctx res_dns con)
+      let get ?ctx:_ = get ~ctx:(ctx res_dns con)
+      let post ?ctx:_ = post ~ctx:(ctx res_dns con)
+      let post_form ?ctx:_ = post_form ~ctx:(ctx res_dns con)
+      let put ?ctx:_ = put ~ctx:(ctx res_dns con)
+      let delete ?ctx:_ = delete ~ctx:(ctx res_dns con)
     end
     in
     let irmin_url = Key_gen.irmin_url () in
-    let (module KV_Maker) = match irmin_url with
-      | "" -> (module Irmin_db.Make
+    let etcd_url = Key_gen.etcd_url () in
+    let (module KV_Maker) = match irmin_url, etcd_url with
+      | "", "" -> (module Irmin_db.Make
         (Irmin_mem.KV)
         (Enc)
         (struct let config = (Irmin_mem.config ()) end)
         : S.KV_Maker)
-      | url -> (module Irmin_db.Make
-        (Irmin_http.KV(Client))
+      | url, "" -> (module Irmin_db.Make
+        (Irmin_http.KV(Cohttp_Client))
         (Enc)
         (struct let config = (Irmin_http.config (Uri.of_string url)) end)
+        : S.KV_Maker)
+      | _, url -> (module Etcd_db.Make
+        (Cohttp_Client)
+        (Enc)
+        (struct let host = url end)
         : S.KV_Maker)
     in
     let module KR = Keyring.Make(KV_Maker) in

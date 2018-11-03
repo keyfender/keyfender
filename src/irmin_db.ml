@@ -1,13 +1,7 @@
 (* Database interface to Irmin *)
 
 open Lwt.Infix
-
-exception Failure_exn of Yojson.Basic.json
-
-let failwith_desc desc =
-  raise (Failure_exn (`Assoc [
-    ("description", `String desc)
-  ]))
+open Util
 
 module Make
     (KV: Irmin.KV_MAKER)

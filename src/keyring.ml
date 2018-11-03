@@ -1,5 +1,6 @@
 open Lwt.Infix
 open Sexplib.Std
+open Util
 
 module Make (KV_Maker: S.KV_Maker) = struct
 
@@ -13,13 +14,11 @@ module Priv = struct
   } [@@deriving sexp]
 end
 
-exception Failure_exn of Yojson.Basic.json
+module YB = Yojson.Basic
 
 type 'a result =
   | Ok of 'a
-  | Failure of Yojson.Basic.json
-
-module YB = Yojson.Basic
+  | Failure of YB.json
 
 module Pub = struct
   type data =
@@ -42,25 +41,6 @@ end
 
 (* helper functions *)
 
-(* let failwith json:YB.json =
-  raise (Failure_exn json) *)
-
-let failwith_desc desc =
-  raise (Failure_exn (`Assoc [
-    ("description", `String desc)
-  ]))
-
-let failwith_missing keys =
-  let l = List.map (fun x -> `String x) keys in
-  raise (Failure_exn (`Assoc [
-    ("description", `String "JSON keys are missing");
-    ("missing", `List l)
-  ]))
-
-let rem_opt = function
-  | Some x -> x
-  | None -> assert false
-
 let pub_of_priv { Priv.purpose; data } =
   let data = match data with
     | Priv.Rsa d -> Pub.Rsa (Nocrypto.Rsa.pub_of_priv d)
@@ -71,16 +51,6 @@ let pub_of_priv { Priv.purpose; data } =
   let rec f n = if n>=0 && s.[n]='\000' then f (pred n) else n in
   let len = String.length s |> pred |> f |> succ in
   String.sub s 0 len *)
-
-let b64_encode = B64.encode ~alphabet:B64.uri_safe_alphabet
-
-let b64_decode = B64.decode ~alphabet:B64.uri_safe_alphabet
-
-let b64_of_z z =
-  b64_encode (Cstruct.to_string (Nocrypto.Numeric.Z.to_cstruct_be z))
-
-let z_of_b64 s =
-  Nocrypto.Numeric.Z.of_cstruct_be (Cstruct.of_string (b64_decode s))
 
 (* let pq_of_ned n e d =
   let open Z in
@@ -103,11 +73,6 @@ let z_of_b64 s =
   in
   f ks *)
 
-let string_of_json_key json key =
-  try
-    YB.Util.member key json |> YB.Util.to_string
-  with
-    YB.Util.Type_error _ -> failwith_missing [key]
 
 let rsa_priv_of_json json =
   let e = string_of_json_key json "publicExponent" |> z_of_b64 in

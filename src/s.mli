@@ -17,6 +17,10 @@ module type IrminConf = sig
   val config : Irmin.config
 end
 
+module type EtcdConf = sig
+  val host : string
+end
+
 module type Keyring = sig
   type pub
   (** public key representation *)
