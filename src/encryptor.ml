@@ -6,10 +6,10 @@ let cs_of_json_val json key =
   YB.Util.member key json
   |> YB.Util.to_string
   |> B64.decode ~alphabet:B64.uri_safe_alphabet
-  |> Cstruct.of_string
+  |> Cstruct.of_string ?allocator:None
 
 let b64_of_cs cs = Cstruct.to_string cs
-  |> B64.encode ~alphabet:B64.uri_safe_alphabet
+  |> B64.encode ~pad:true ~alphabet:B64.uri_safe_alphabet
 
 module Make
   (K : S.EncKey)
