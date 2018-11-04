@@ -16,7 +16,6 @@ module Make(Client: Cohttp_lwt.S.Client) = struct
 
   let make_uri host key =
     let path = make_path key in
-    Printf.eprintf "Uri: %s\n" (host ^ path);
     Uri.of_string (host ^ path)
 
   let ttl_param ttl =
@@ -46,7 +45,6 @@ module Make(Client: Cohttp_lwt.S.Client) = struct
       let loc =  Cohttp.Header.get h "location"  in
       match loc with
       | Some u ->
-        print_endline "redirecting";
         let nuri = Uri.of_string u |> Uri.resolve "http" uri in
         f nuri 
       | None -> Lwt.fail_with "Couldn't follow redirect"
@@ -79,7 +77,6 @@ module Make(Client: Cohttp_lwt.S.Client) = struct
 
   let create_dir host key ?ttl () =
     let base = make_uri host key in
-    print_endline (Uri.to_string base);
     let ttl_p = ttl_param ttl in
     let params =
       [
