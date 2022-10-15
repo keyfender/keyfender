@@ -1,3 +1,6 @@
+| :warning: This project was the Proof-of-Concept implementation for what is now available as the [Nitrokey NetHSM](https://www.nitrokey.com/products/nethsm). :warning: |
+| --- |
+
 # keyfender Unikernel
 
 [![Build Status](https://travis-ci.org/keyfender/keyfender.svg?branch=master)](https://travis-ci.org/keyfender/keyfender)
